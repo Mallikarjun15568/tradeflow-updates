@@ -1,0 +1,61 @@
+const db = require("../database/connection");
+
+function validateProduct(product) {
+  if (!product.name || !product.name.trim()) {
+    throw new Error('Product name is required');
+  }
+  if (!Number.isFinite(product.selling_price) || product.selling_price <= 0) {
+    throw new Error('Selling price must be greater than 0');
+  }
+  if (product.stock_quantity !== undefined && product.stock_quantity < 0) {
+    throw new Error('Stock quantity cannot be negative');
+  }
+}
+
+function addProduct(product) {
+    const stmt = db.prepare(`
+    INSERT INTO products (name, category_id, sku, unit, size, purchase_price, selling_price, stock_quantity)
+    VALUES (@name, @category_id, @sku, @unit, @size, @purchase_price, @selling_price, @stock_quantity)
+  `);
+    const result = stmt.run(product);
+    return result.lastInsertRowid;
+}
+
+function getAllProducts() {
+    const stmt = db.prepare(`SELECT * FROM products ORDER BY name`);
+    return stmt.all();
+}
+
+function getProductById(id) {
+    const stmt = db.prepare(`SELECT * FROM products WHERE id = ?`);
+    return stmt.get(id);
+}
+
+function updateProduct(id, product) {
+    const stmt = db.prepare(`
+    UPDATE products
+    SET name = @name,
+        category_id = @category_id,
+        sku = @sku,
+        unit = @unit,
+        size = @size,
+        purchase_price = @purchase_price,
+        selling_price = @selling_price,
+        stock_quantity = @stock_quantity
+    WHERE id = @id
+  `);
+    stmt.run({ ...product, id });
+}
+
+function deleteProduct(id) {
+    const stmt = db.prepare(`DELETE FROM products WHERE id = ?`);
+    stmt.run(id);
+}
+
+module.exports = {
+    addProduct,
+    getAllProducts,
+    getProductById,
+    updateProduct,
+    deleteProduct
+};

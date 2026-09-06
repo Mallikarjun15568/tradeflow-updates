@@ -1,0 +1,63 @@
+{
+  "name": "wholesalebilling",
+  "version": "1.0.0",
+  "description": "Wholesale Billing Electron app",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build:frontend": "npm --prefix src run build",
+    "build:win": "npm run build:frontend && electron-builder --win",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "electron",
+    "billing",
+    "wholesale"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9",
+    "node-machine-id": "^1.1.12",
+    "pdfkit": "^0.20.2"
+  },
+  "build": {
+    "appId": "com.tradeflow.business",
+    "productName": "TradeFlow",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Mallikarjun15568",
+        "repo": "tradeflow-updates"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "src/dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TradeFlow",
+      "uninstallDisplayName": "TradeFlow"
+    }
+  }
+}

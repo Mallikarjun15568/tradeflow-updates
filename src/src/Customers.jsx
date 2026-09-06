@@ -1,0 +1,429 @@
+import { useState, useEffect } from 'react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Phone,
+  X,
+  Search,
+} from 'lucide-react';
+const emptyForm = { name: '', phone: '', address: '' };
+
+function Customers({onViewCustomer}) {
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerOverview, setCustomerOverview] = useState(null);
+  const [customerTransactions, setCustomerTransactions] = useState([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('all');
+  const [creditCustomers, setCreditCustomers] = useState([]);
+  const [creditBills, setCreditBills] = useState({});
+  
+  useEffect(() => {
+    loadCustomers();
+    loadCreditCustomers();
+  }, []);
+    
+  async function openCustomerDetails(customer) {
+  setSelectedCustomer(customer);
+  setDetailsLoading(true);
+
+  try {
+    const [overview, transactions] = await Promise.all([
+      window.api.customers.getOverview(customer.id),
+      window.api.customers.getTransactions(customer.id),
+    ]);
+
+    setCustomerOverview(overview);
+    setCustomerTransactions(transactions);
+  } catch (error) {
+    console.error('Failed to load customer details:', error);
+  } finally {
+    setDetailsLoading(false);
+  }
+}
+
+function closeCustomerDetails() {
+  setSelectedCustomer(null);
+  setCustomerOverview(null);
+  setCustomerTransactions([]);
+}
+
+  async function loadCreditCustomers() {
+  try {
+    const data = await window.api.customers.getCreditCustomers();
+    setCreditCustomers(data);
+  } catch (error) {
+    console.error('Failed to load credit customers:', error);
+  }
+}
+  async function loadCreditBills(customerId) {
+    try {
+      const bills = await window.api.customers.getCreditBills(customerId);
+
+      setCreditBills((prev) => ({
+        ...prev,
+        [customerId]: bills,
+      }));
+    } catch (error) {
+      console.error('Failed to load credit bills:', error);
+    }
+  }
+  async function loadCustomers() {
+    setLoading(true);
+    const data = await window.api.customers.getAll();
+    setCustomers(data);
+    const pages = Math.max(1, Math.ceil(data.length / itemsPerPage));
+    setCurrentPage((p) => Math.min(p, pages));
+    setLoading(false);
+  }
+
+  const openAddModal = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setShowModal(true);
+  };
+
+  const openEditModal = (customer) => {
+    setEditingId(customer.id);
+    setForm({
+      name: customer.name,
+      phone: customer.phone || '',
+      address: customer.address || '',
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const handleSave = async () => {
+   
+    //  Validation
+  if (!form.name.trim()) {
+    alert('Customer name is required.');
+    return;
+  }
+
+  if (form.phone && !/^\d{10}$/.test(form.phone.trim())) {
+    alert('Phone number must be exactly 10 digits.');
+    return;
+  }
+  setSaving(true);
+    const payload = {
+      name: form.name,
+      phone: form.phone,
+      address: form.address,
+    };
+
+    if (editingId) {
+      await window.api.customers.update(editingId, payload);
+      alert('Customer updated successfully.');
+    } else {
+      await window.api.customers.add(payload);
+    }
+
+    setSaving(false);
+    closeModal();
+    await loadCustomers();
+    await loadCreditCustomers();
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    await window.api.customers.delete(id);
+    await loadCustomers();
+    await loadCreditCustomers();
+  };
+
+const filteredCustomers = (
+  customerFilter === 'credit' ? creditCustomers : customers
+).filter((customer) => {
+  const search = searchTerm.toLowerCase().trim();
+
+  if (!search) return true;
+
+  return (
+    customer.name?.toLowerCase().includes(search) ||
+    customer.phone?.toLowerCase().includes(search) ||
+    customer.address?.toLowerCase().includes(search)
+  );
+});
+
+  const totalPages = Math.max(
+   1,
+   Math.ceil(filteredCustomers.length / itemsPerPage)
+);
+
+  const paginatedCustomers = filteredCustomers.slice(
+   (currentPage - 1) * itemsPerPage,
+   currentPage * itemsPerPage
+);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800">Customers</h2>
+          <p className="text-sm text-gray-500">
+              {searchTerm
+               ? `${filteredCustomers.length} customers found`
+                    : customerFilter === 'credit'
+               ? `${creditCustomers.length} credit customers`
+               : `${customers.length} customers registered`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 mb-4">
+  <button
+    onClick={() => {
+      setCustomerFilter('all');
+      setCurrentPage(1);
+    }}
+    className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+      customerFilter === 'all'
+        ? 'bg-blue-600 text-white'
+        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+    }`}
+  >
+    All Customers
+  </button>
+
+  <button
+    onClick={async () => {
+      setCustomerFilter('credit');
+      setCurrentPage(1);
+
+      for (const customer of creditCustomers) {
+        await loadCreditBills(customer.id);
+      }
+    }}
+    className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+      customerFilter === 'credit'
+        ? 'bg-blue-600 text-white'
+        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+    }`}
+  >
+    Credit Customers
+  </button>
+</div>
+        <div className="relative w-72">
+  <Search
+    size={16}
+    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+  />
+
+  <input
+    type="text"
+    value={searchTerm}
+    onChange={(e) => {
+      setSearchTerm(e.target.value);
+      setCurrentPage(1);
+    }}
+    placeholder="Search customers..."
+    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+  />
+</div>
+        <button
+          onClick={openAddModal}
+          className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={16} />
+          Add Customer
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+              <th className="px-6 py-3 font-medium">Name</th>
+              <th className="px-6 py-3 font-medium">Phone</th>
+              <th className="px-6 py-3 font-medium">Address</th>
+              {customerFilter === 'credit' && (
+                <>
+                  <th className="px-6 py-3 font-medium">Balance</th>
+                  <th className="px-6 py-3 font-medium">Payment Due</th>
+                </>
+              )}
+              <th className="px-6 py-3 font-medium text-right">Actions</th>
+         
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={customerFilter === 'credit' ? 6 : 4} className="px-6 py-8 text-center text-gray-400">Loading...</td></tr>
+            ) : customers.length === 0 ? (
+              <tr><td colSpan={customerFilter === 'credit' ? 6 : 4} className="px-6 py-8 text-center text-gray-400">No customers found</td></tr>
+            ) : (
+              paginatedCustomers.map((customer) => (
+                <tr key={customer.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                  <td className="px-6 py-3.5 font-medium text-gray-800">{customer.name}</td>
+                  <td className="px-6 py-3.5 text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <Phone size={13} className="text-gray-400" />
+                      {customer.phone || '—'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5 text-gray-500">{customer.address || '—'}</td>
+                  {customerFilter === 'credit' && (
+  <td className="px-6 py-3.5 font-medium text-red-600">
+    ₹{Number(customer.remaining || 0).toFixed(2)}
+  </td>
+)}
+  {customerFilter === 'credit' && (
+    <td className="px-6 py-3.5 text-gray-600">
+      {creditBills[customer.id]?.length > 0 ? (
+        <div className="space-y-1">
+          {creditBills[customer.id].map((bill) => {
+            const billDate = new Date(bill.invoice_date);
+            const today = new Date();
+            const dueDays = Math.max(
+              0,
+              Math.floor(
+                (today - billDate) / (1000 * 60 * 60 * 24)
+              )
+            );
+
+            return (
+              <div key={bill.id} className="text-sm">
+                {dueDays} {dueDays === 1 ? 'day' : 'days'}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        '—'
+      )}
+    </td>
+  )}
+  <td className="px-6 py-3.5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => onViewCustomer(customer.id)}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-md hover:bg-blue-50"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => openEditModal(customer)}
+                        className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(customer.id, customer.name)}
+                        className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <span className="text-xs text-gray-500">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {editingId ? 'Edit Customer' : 'Add Customer'}
+              </h3>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1 block">Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1 block">Phone</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1 block">Address</label>
+                <input
+                  type="text"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : editingId ? 'Update' : 'Add Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Customers;

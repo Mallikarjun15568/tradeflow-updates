@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@media print {
+  @page {
+    size: A5;
+    margin: 0.3cm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #invoice-print-area, #invoice-print-area * {
+    visibility: visible;
+  }
+  #invoice-print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 20cm;
+  }
+}
