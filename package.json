@@ -31,6 +31,7 @@
   "build": {
     "appId": "com.tradeflow.business",
     "productName": "TradeFlow",
+    "icon": "build/tradeflow.ico",
     "publish": [
       {
         "provider": "github",
