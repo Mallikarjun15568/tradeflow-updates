@@ -334,13 +334,6 @@ const loadSettings = async () => {
   </div>
 </div>
 
-
-      {/* App Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 mb-1">About</h3>
-        <p className="text-xs text-gray-500">Wholesale Billing System — Version 1.0.0</p>
-      </div>
-
       <button
         onClick={handleSave}
         disabled={saving}

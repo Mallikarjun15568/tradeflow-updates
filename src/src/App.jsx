@@ -7,6 +7,7 @@ import {
   Warehouse,
   BarChart3,
   Settings as SettingsIcon,
+  Info,
 } from 'lucide-react';
 import Products from './Products';
 import Customers from './Customers';
@@ -18,6 +19,7 @@ import Dashboard from './Dashboard';
 import CustomerDetails from './CustomerDetails';
 import Reports from './Reports';
 import Activation from './Activation';
+import About from './About';
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -27,6 +29,7 @@ const menuItems = [
   { id: 'stock', label: 'Stock', icon: Warehouse },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'about', label: 'About', icon: Info },
 ];
 
 function App() {
@@ -154,6 +157,8 @@ function App() {
   <Settings />
 ) : activeSection === 'reports' ? (
   <Reports />
+) : activeSection === 'about' ? (
+ <About />
 ) : null}
         </main>
       </div>

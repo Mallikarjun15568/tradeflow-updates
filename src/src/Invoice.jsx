@@ -334,8 +334,35 @@
                 )}
 
                 {/* Footer — on every page */}
-                <div className="px-8 pb-6 pt-4 text-xs text-gray-400 border-t border-gray-100">
-                  {isLastPage ? 'Thank you for your business!' : `Continued on page ${pageIndex + 2}...`}
+                <div className="px-8 pb-5 pt-3 text-xs text-gray-400 border-t border-gray-100">
+                  {isLastPage ? (
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <div className="text-gray-500 font-medium">
+                          Thank you for your business!
+                        </div>
+
+                        <div className="mt-1 text-[9px] text-gray-400">
+                          TradeFlow • Developed by Mallikarjun S. Asapure
+                          • Support: +91 95796 88201
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] text-gray-400 text-right">
+                        Wholesale Billing & Business Management
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <span>
+                        TradeFlow • Developed by Mallikarjun S. Asapure
+                      </span>
+
+                      <span>
+                        Continued on page {pageIndex + 2}...
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
