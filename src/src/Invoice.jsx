@@ -343,8 +343,7 @@
                         </div>
 
                         <div className="mt-1 text-[9px] text-gray-400">
-                          TradeFlow • Developed by Mallikarjun S. Asapure
-                          • Support: +91 95796 88201
+                          TradeFlow • Support: +91 95796 88201
                         </div>
                       </div>
 
@@ -355,7 +354,7 @@
                   ) : (
                     <div className="flex justify-between items-center">
                       <span>
-                        TradeFlow • Developed by Mallikarjun S. Asapure
+                        TradeFlow
                       </span>
 
                       <span>
