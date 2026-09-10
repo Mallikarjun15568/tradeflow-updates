@@ -1,4 +1,4 @@
-function About() {
+function About({ appVersion }) {
   return (
     <div className="max-w-3xl space-y-6">
       {/* Page Header */}
@@ -32,7 +32,7 @@ function About() {
               </p>
 
               <span className="inline-flex items-center mt-2 px-2.5 py-1 rounded-md bg-blue-50 text-blue-600 text-xs font-medium">
-                Version 1.0.0
+                Version {appVersion || '...'}
               </span>
             </div>
           </div>

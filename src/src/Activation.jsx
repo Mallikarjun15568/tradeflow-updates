@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function Activation({ onActivated }) {
+function Activation({ appVersion, onActivated }) {
   const [licenseKey, setLicenseKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -92,7 +92,7 @@ function Activation({ onActivated }) {
           </form>
 
           <p className="text-xs text-gray-400 text-center mt-6">
-            TradeFlow v1.0.0
+            TradeFlow v{appVersion || '...'}
           </p>
 
         </div>

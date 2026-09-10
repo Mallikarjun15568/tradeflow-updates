@@ -39,15 +39,77 @@ function App() {
   const [viewingCustomerId, setViewingCustomerId] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [checkingLicense, setCheckingLicense] = useState(true);
+  const [appVersion, setAppVersion] = useState(null);
 
   useEffect(() => {
-    const savedLicense = localStorage.getItem('tradeflow_license');
+    const isLicenseExpired = (license) => {
+      if (!license || !license.expires_at) {
+        return false;
+      }
 
-    if (savedLicense) {
-      setIsActivated(true);
-    }
+      const expiryTime = new Date(
+        license.expires_at
+      ).getTime();
 
-    setCheckingLicense(false);
+      return (
+        Number.isFinite(expiryTime) &&
+        expiryTime <= Date.now()
+      );
+    };
+
+    const checkSavedLicense = () => {
+      const savedLicense = localStorage.getItem(
+        'tradeflow_license'
+      );
+
+      if (!savedLicense) {
+        setIsActivated(false);
+        return;
+      }
+
+      try {
+        const license = JSON.parse(savedLicense);
+
+        if (isLicenseExpired(license)) {
+          localStorage.removeItem('tradeflow_license');
+          setIsActivated(false);
+          return;
+        }
+
+        setIsActivated(true);
+      } catch (error) {
+        console.error(
+          'Could not read saved license:',
+          error
+        );
+        localStorage.removeItem('tradeflow_license');
+        setIsActivated(false);
+      }
+    };
+
+    const loadAppState = async () => {
+      checkSavedLicense();
+
+      try {
+        const version = await window.api.license.getAppVersion();
+        setAppVersion(version);
+      } catch (error) {
+        console.error('Could not load app version:', error);
+      } finally {
+        setCheckingLicense(false);
+      }
+    };
+
+    loadAppState();
+
+    const licenseCheckInterval = window.setInterval(
+      checkSavedLicense,
+      60 * 1000
+    );
+
+    return () => {
+      window.clearInterval(licenseCheckInterval);
+    };
   }, []);
 
   if (checkingLicense) {
@@ -63,6 +125,7 @@ function App() {
   if (!isActivated) {
     return (
       <Activation
+        appVersion={appVersion}
         onActivated={() => setIsActivated(true)}
       />
     );
@@ -109,7 +172,7 @@ function App() {
         </nav>
 
         <div className="px-6 py-4 border-t border-gray-200 text-xs text-gray-400">
-          TradeFlow v1.0.0
+          TradeFlow v{appVersion || '...'}
         </div>
       </aside>
 
@@ -158,7 +221,7 @@ function App() {
 ) : activeSection === 'reports' ? (
   <Reports />
 ) : activeSection === 'about' ? (
- <About />
+<About appVersion={appVersion} />
 ) : null}
         </main>
       </div>

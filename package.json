@@ -58,7 +58,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "TradeFlow",
-      "uninstallDisplayName": "TradeFlow"
+      "uninstallDisplayName": "TradeFlow",
+      "artifactName": "TradeFlow-Setup-${version}.${ext}"
     }
   }
 }
