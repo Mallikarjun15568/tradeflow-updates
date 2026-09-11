@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
 const { machineIdSync } = require("node-machine-id");
 const { autoUpdater } = require("electron-updater");
@@ -43,6 +43,20 @@ function checkForUpdates() {
 
     autoUpdater.checkForUpdatesAndNotify();
 }
+
+ipcMain.handle("billing:quickPrint", (event) => {
+    return new Promise((resolve) => {
+        event.sender.print(
+            {
+                silent: true,
+                printBackground: true,
+            },
+            (success, failureReason) => {
+                resolve({ success, failureReason });
+            }
+        );
+    });
+});
 
 app.whenReady().then(async () => {
 

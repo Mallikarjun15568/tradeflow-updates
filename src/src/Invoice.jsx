@@ -1,5 +1,5 @@
   import { Fragment, useState, useEffect } from 'react';
-  import { ArrowLeft, Printer } from 'lucide-react';
+  import { ArrowLeft, Printer, Zap } from 'lucide-react';
 
   const ITEMS_PER_PAGE = 18;
 
@@ -25,6 +25,8 @@
     const [customer, setCustomer] = useState(null);
     const [shopSettings, setShopSettings] = useState({});
     const [loading, setLoading] = useState(true);
+    const [printing, setPrinting] = useState(false);
+    const [printError, setPrintError] = useState('');
 
     useEffect(() => {
       loadInvoice();
@@ -40,7 +42,33 @@
     };
 
     const handlePrint = () => {
+      setPrintError('');
+      const handleAfterPrint = () => {
+        window.removeEventListener('afterprint', handleAfterPrint);
+        onBack();
+      };
+
+      window.addEventListener('afterprint', handleAfterPrint);
       window.print();
+    };
+
+    const handleQuickPrint = async () => {
+      setPrintError('');
+      setPrinting(true);
+
+      try {
+        const result = await window.api.billing.quickPrint();
+        if (!result.success) {
+          setPrintError(result.failureReason || 'Quick print failed.');
+          return;
+        }
+
+        onBack();
+      } catch (error) {
+        setPrintError(error.message || 'Quick print failed.');
+      } finally {
+        setPrinting(false);
+      }
     };
 
     if (loading) {
@@ -68,14 +96,30 @@
             <ArrowLeft size={16} />
             Back to Billing
           </button>
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Printer size={16} />
-            Print Invoice
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              disabled={printing}
+              className="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Printer size={16} />
+              Print Invoice
+            </button>
+            <button
+              onClick={handleQuickPrint}
+              disabled={printing}
+              className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <Zap size={16} />
+              {printing ? 'Printing...' : 'Quick Print'}
+            </button>
+          </div>
         </div>
+        {printError && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg print:hidden">
+            {printError}
+          </div>
+        )}
 
         <div id="invoice-print-area" className="max-w-3xl mx-auto print:max-w-none space-y-6 print:space-y-0">
           {pages.map((pageItems, pageIndex) => {

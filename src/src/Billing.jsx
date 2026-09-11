@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 function Billing({ onInvoiceCreated, onViewInvoice }) {
@@ -10,6 +10,7 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [productSearch, setProductSearch] = useState('');
+  const productInputRef = useRef(null);
   const [itemSize, setItemSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [rate, setRate] = useState('');
@@ -93,6 +94,7 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     setItemSize('');
     setQuantity(1);
     setRate('');
+    productInputRef.current?.focus();
   };
 
   const handleRemoveItem = (id) => setItems(items.filter((i) => i.id !== id));
@@ -481,6 +483,7 @@ const paginatedInvoices = filteredInvoices.slice(
               <div className="flex-1 min-w-[180px]">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Product</label>
                 <input
+                  ref={productInputRef}
                   type="text"
                   list="product-list"
                   placeholder="Search or type item name"

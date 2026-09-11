@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
     getInvoiceWithItems: (id) => ipcRenderer.invoke('billing:getInvoiceWithItems', id),
     addPayment: (invoiceId, amount, method) => ipcRenderer.invoke('billing:addPayment', invoiceId, amount, method),
     getInvoicePayments: (invoiceId) => ipcRenderer.invoke('billing:getInvoicePayments', invoiceId),
+    quickPrint: () => ipcRenderer.invoke('billing:quickPrint'),
   },
   dashboard: {
   getSummary: () => ipcRenderer.invoke('dashboard:getSummary'),
