@@ -44,7 +44,7 @@ function checkForUpdates() {
     autoUpdater.checkForUpdatesAndNotify();
 }
 
-ipcMain.handle("billing:quickPrint", (event) => {
+function printCurrentPage(event, silent) {
     return new Promise((resolve, reject) => {
         if (event.sender.isDestroyed()) {
             reject(new Error("Print window is no longer available"));
@@ -69,7 +69,7 @@ ipcMain.handle("billing:quickPrint", (event) => {
         try {
             event.sender.print(
                 {
-                    silent: true,
+                    silent,
                     printBackground: true,
                 },
                 (success, failureReason) => {
@@ -80,7 +80,10 @@ ipcMain.handle("billing:quickPrint", (event) => {
             finish(() => reject(error));
         }
     });
-});
+}
+
+ipcMain.handle("billing:print", (event) => printCurrentPage(event, false));
+ipcMain.handle("billing:quickPrint", (event) => printCurrentPage(event, true));
 
 app.whenReady().then(async () => {
 

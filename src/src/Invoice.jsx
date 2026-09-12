@@ -28,7 +28,6 @@
     const [printing, setPrinting] = useState(false);
     const [printError, setPrintError] = useState('');
     const printInProgressRef = useRef(false);
-    const printCleanupRef = useRef(null);
     const invoiceRequestRef = useRef(0);
 
     useEffect(() => {
@@ -37,7 +36,6 @@
 
       return () => {
         ++invoiceRequestRef.current;
-        printCleanupRef.current?.();
       };
     }, [invoiceId]);
 
@@ -63,29 +61,26 @@
       }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
       if (printInProgressRef.current) return;
 
       printInProgressRef.current = true;
       setPrinting(true);
       setPrintError('');
-      const handleAfterPrint = () => {
-        printCleanupRef.current?.();
-        onBack();
-      };
 
-      printCleanupRef.current = () => {
-        window.removeEventListener('afterprint', handleAfterPrint);
-        printCleanupRef.current = null;
+      try {
+        const result = await window.api.billing.print();
+        if (!result.success) {
+          setPrintError(result.failureReason || 'Print job cancelled.');
+          return;
+        }
+
+        onBack();
+      } catch (error) {
+        setPrintError(error.message || 'Print failed.');
+      } finally {
         printInProgressRef.current = false;
         setPrinting(false);
-      };
-      window.addEventListener('afterprint', handleAfterPrint);
-      try {
-        window.print();
-      } catch (error) {
-        printCleanupRef.current?.();
-        setPrintError(error.message || 'Print failed.');
       }
     };
 

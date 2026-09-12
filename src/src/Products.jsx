@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, Search } from 'lucide-react';
 
-const emptyForm = { name: '', unit: 'pcs', size: '', selling_price: '', stock_quantity: '' };
+const emptyForm = { name: '', unit: 'pcs', selling_price: '', stock_quantity: '' };
 
 function Products() {
   const [products, setProducts] = useState([]);
@@ -9,9 +9,9 @@ function Products() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [editingSize, setEditingSize] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showCustomUnit, setShowCustomUnit] = useState(false);
-  const [showCustomSize, setShowCustomSize] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [search, setSearch] = useState('');
@@ -49,22 +49,19 @@ function Products() {
   const openAddModal = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setEditingSize(null);
     setShowCustomUnit(false);
-    setShowCustomSize(false);
     setShowModal(true);
   };
 
   const openEditModal = (product) => {
     setEditingId(product.id);
     const knownUnits = ['pcs', 'dozen', 'half_dozen', 'box'];
-    const knownSizes = ['S', 'M', 'L', 'XL', 'XXL', ''];
-    const productSize = product.size || '';
+    setEditingSize(product.size || null);
     setShowCustomUnit(!knownUnits.includes(product.unit));
-    setShowCustomSize(!knownSizes.includes(productSize));
     setForm({
       name: product.name,
       unit: product.unit || 'pcs',
-      size: productSize,
       selling_price: product.selling_price,
       stock_quantity: product.stock_quantity,
     });
@@ -74,6 +71,7 @@ function Products() {
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
+    setEditingSize(null);
     setForm(emptyForm);
   };
 
@@ -100,7 +98,7 @@ function Products() {
       name: form.name,
       sku: '',
       unit: form.unit,
-      size: form.size,
+      size: editingId ? editingSize : null,
       purchase_price: 0,
       selling_price: sellingPrice,
       stock_quantity: stockQuantity,
@@ -199,7 +197,6 @@ const paginatedProducts = filteredProducts.slice(
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
               <th className="px-6 py-3 font-medium">Name</th>
-              <th className="px-6 py-3 font-medium">Size</th>
               <th className="px-6 py-3 font-medium">Unit</th>
               <th className="px-6 py-3 font-medium">Price</th>
               <th className="px-6 py-3 font-medium">Stock</th>
@@ -208,14 +205,13 @@ const paginatedProducts = filteredProducts.slice(
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">Loading...</td></tr>
+              <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-400">Loading...</td></tr>
             ) : filteredProducts.length === 0 ? (
-              <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">No products found</td></tr>
+              <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-400">No products found</td></tr>
             ) : (
               paginatedProducts.map((product) => (
                 <tr key={product.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <td className="px-6 py-3.5 font-medium text-gray-800">{product.name}</td>
-                  <td className="px-6 py-3.5 text-gray-500">{product.size || '—'}</td>
                   <td className="px-6 py-3.5 text-gray-500">{getUnitLabel(product.unit)}</td>
                   <td className="px-6 py-3.5 text-gray-700">₹{product.selling_price}</td>
                   <td className="px-6 py-3.5">
@@ -296,51 +292,6 @@ const paginatedProducts = filteredProducts.slice(
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              {showCustomSize ? (
-                <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Size</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. 20/24, 26/30"
-                      value={form.size}
-                      onChange={(e) => setForm({ ...form, size: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setShowCustomSize(false); setForm({ ...form, size: '' }); }}
-                      className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Size</label>
-                  <select
-                    value={form.size}
-                    onChange={(e) => {
-                      if (e.target.value === 'custom') {
-                        setShowCustomSize(true);
-                        setForm({ ...form, size: '' });
-                      } else {
-                        setForm({ ...form, size: e.target.value });
-                      }
-                    }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                  >
-                    <option value="">Select size</option>
-                    <option value="S">S</option>
-                    <option value="M">M</option>
-                    <option value="L">L</option>
-                    <option value="XL">XL</option>
-                    <option value="XXL">XXL</option>
-                    <option value="custom">Custom (e.g. 20/24)...</option>
-                  </select>
-                </div>
-              )}
               {showCustomUnit ? (
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Unit</label>
