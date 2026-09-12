@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   ArrowLeft,
   Phone,
@@ -31,8 +31,11 @@ function CustomerDetails({ customerId, onBack }) {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [sharingStatement, setSharingStatement] = useState(false);
+  const detailsRequestRef = useRef(0);
 
   async function loadCustomerDetails() {
+    const requestId = ++detailsRequestRef.current;
     setLoading(true);
 
     try {
@@ -43,18 +46,25 @@ function CustomerDetails({ customerId, onBack }) {
           window.api.customers.getCreditBills(customerId),
         ]);
 
+      if (requestId !== detailsRequestRef.current) return;
       setOverview(overviewData);
       setTransactions(transactionData);
       setCreditBills(creditBillsData || []);
     } catch (error) {
       console.error('Failed to load customer details:', error);
     } finally {
-      setLoading(false);
+      if (requestId === detailsRequestRef.current) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     loadCustomerDetails();
+
+    return () => {
+      ++detailsRequestRef.current;
+    };
   }, [customerId]);
 
   const formatMoney = (amount) => {
@@ -247,7 +257,10 @@ function CustomerDetails({ customerId, onBack }) {
   };
 
   async function handleShareViaWhatsApp() {
+    if (sharingStatement) return;
+
     try {
+      setSharingStatement(true);
       if (!customer.phone) {
         alert('Customer phone number is not available.');
         return;
@@ -277,6 +290,8 @@ function CustomerDetails({ customerId, onBack }) {
     } catch (error) {
       console.error('Failed to share statement:', error);
       alert('Failed to generate or share statement.');
+    } finally {
+      setSharingStatement(false);
     }
   }
 
@@ -341,7 +356,8 @@ function CustomerDetails({ customerId, onBack }) {
           </button>
           <button
             onClick={handleShareViaWhatsApp}
-            className="flex items-center gap-2 border border-green-200 text-green-700 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-green-50"
+            disabled={sharingStatement}
+            className="flex items-center gap-2 border border-green-200 text-green-700 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-green-50 disabled:opacity-50"
           >
             <MessageCircle size={16} />
             Share via WhatsApp

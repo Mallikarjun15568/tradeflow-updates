@@ -3,7 +3,12 @@ const customerService = require('./customerService');
 const { getProductById } = require('./productService');
 
 function createInvoice(invoiceData) {
+  if (!invoiceData || typeof invoiceData !== 'object') {
+    throw new Error('Invoice data is required');
+  }
   const { customer_id, items, discount = 0, tax = 0 } = invoiceData;
+  const normalizedDiscount = Number(discount);
+  const normalizedTax = Number(tax);
   const effectiveCustomerId = customer_id ? customer_id : null;
 
   let customerSnapshot = { customer_name: null, customer_address: null, customer_phone: null };
@@ -23,9 +28,12 @@ function createInvoice(invoiceData) {
       customer_phone: customer.phone || null,
     };
   }
-  if (!Number.isFinite(discount) || discount < 0) {
+  if (!Number.isFinite(normalizedDiscount) || normalizedDiscount < 0) {
   throw new Error('Discount cannot be negative');
 }
+  if (!Number.isFinite(normalizedTax) || normalizedTax < 0) {
+    throw new Error('Tax cannot be negative');
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Invoice must have at least one item');
@@ -49,6 +57,9 @@ function createInvoice(invoiceData) {
         const effectiveRate = item.rate !== undefined && item.rate !== null
           ? Number(item.rate)
           : product.selling_price;
+        if (!Number.isFinite(effectiveRate) || effectiveRate < 0) {
+          throw new Error('Invalid product rate');
+        }
 
         const itemSubtotal = effectiveRate * item.quantity;
         subtotal += itemSubtotal;
@@ -82,10 +93,10 @@ function createInvoice(invoiceData) {
         });
       }
     }
-    if (discount > subtotal) {
+    if (normalizedDiscount > subtotal) {
       throw new Error('Discount cannot be greater than the subtotal');
     }
-    const grand_total = subtotal - discount + tax;
+    const grand_total = subtotal - normalizedDiscount + normalizedTax;
     
     const invoiceNumberStart =
       db.prepare(`SELECT value FROM settings WHERE key = 'invoice_number_start'`).get()
@@ -132,8 +143,8 @@ function createInvoice(invoiceData) {
       customer_id: effectiveCustomerId,
       ...customerSnapshot,
       subtotal,
-      discount,
-      tax,
+      discount: normalizedDiscount,
+      tax: normalizedTax,
       payment_method: invoiceData.payment_method,
       payment_status,
       grand_total

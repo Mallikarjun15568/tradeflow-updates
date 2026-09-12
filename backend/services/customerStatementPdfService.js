@@ -78,6 +78,7 @@ function generateCustomerStatementPDF({
 
         stream.on('finish', () => resolve({ success: true, filePath, fileName }));
         stream.on('error', reject);
+        doc.on('error', reject);
         doc.pipe(stream);
 
         const pageWidth = 515;

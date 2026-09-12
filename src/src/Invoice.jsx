@@ -1,4 +1,4 @@
-  import { Fragment, useState, useEffect } from 'react';
+  import { Fragment, useState, useEffect, useRef } from 'react';
   import { ArrowLeft, Printer, Zap } from 'lucide-react';
 
   const ITEMS_PER_PAGE = 18;
@@ -27,32 +27,72 @@
     const [loading, setLoading] = useState(true);
     const [printing, setPrinting] = useState(false);
     const [printError, setPrintError] = useState('');
+    const printInProgressRef = useRef(false);
+    const printCleanupRef = useRef(null);
+    const invoiceRequestRef = useRef(0);
 
     useEffect(() => {
-      loadInvoice();
+      const requestId = ++invoiceRequestRef.current;
+      loadInvoice(requestId);
+
+      return () => {
+        ++invoiceRequestRef.current;
+        printCleanupRef.current?.();
+      };
     }, [invoiceId]);
 
-    const loadInvoice = async () => {
+    const loadInvoice = async (requestId) => {
       setLoading(true);
-      const data = await window.api.billing.getInvoiceWithItems(invoiceId);
-      const settings = await window.api.settings.getAll();
-      setInvoice(data);
-      setShopSettings(settings);
-      setLoading(false);
+      try {
+        const [data, settings] = await Promise.all([
+          window.api.billing.getInvoiceWithItems(invoiceId),
+          window.api.settings.getAll(),
+        ]);
+        if (requestId !== invoiceRequestRef.current) return;
+        setInvoice(data);
+        setShopSettings(settings);
+      } catch (error) {
+        console.error('Failed to load invoice:', error);
+        if (requestId === invoiceRequestRef.current) {
+          setPrintError(error.message || 'Could not load invoice.');
+        }
+      } finally {
+        if (requestId === invoiceRequestRef.current) {
+          setLoading(false);
+        }
+      }
     };
 
     const handlePrint = () => {
+      if (printInProgressRef.current) return;
+
+      printInProgressRef.current = true;
+      setPrinting(true);
       setPrintError('');
       const handleAfterPrint = () => {
-        window.removeEventListener('afterprint', handleAfterPrint);
+        printCleanupRef.current?.();
         onBack();
       };
 
+      printCleanupRef.current = () => {
+        window.removeEventListener('afterprint', handleAfterPrint);
+        printCleanupRef.current = null;
+        printInProgressRef.current = false;
+        setPrinting(false);
+      };
       window.addEventListener('afterprint', handleAfterPrint);
-      window.print();
+      try {
+        window.print();
+      } catch (error) {
+        printCleanupRef.current?.();
+        setPrintError(error.message || 'Print failed.');
+      }
     };
 
     const handleQuickPrint = async () => {
+      if (printInProgressRef.current) return;
+
+      printInProgressRef.current = true;
       setPrintError('');
       setPrinting(true);
 
@@ -67,6 +107,7 @@
       } catch (error) {
         setPrintError(error.message || 'Quick print failed.');
       } finally {
+        printInProgressRef.current = false;
         setPrinting(false);
       }
     };

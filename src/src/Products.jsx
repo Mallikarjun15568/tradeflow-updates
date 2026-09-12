@@ -33,11 +33,17 @@ function Products() {
 
   async function loadProducts() {
     setLoading(true);
-    const data = await window.api.products.getAll();
-    setProducts(data);
-    const pages = Math.max(1, Math.ceil(data.length / itemsPerPage));
-    setCurrentPage((p) => Math.min(p, pages));
-    setLoading(false);
+    try {
+      const data = await window.api.products.getAll();
+      setProducts(data);
+      const pages = Math.max(1, Math.ceil(data.length / itemsPerPage));
+      setCurrentPage((p) => Math.min(p, pages));
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      alert('Could not load products. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const openAddModal = () => {
@@ -72,18 +78,23 @@ function Products() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
+
     if (!form.name.trim()){
       alert('Product name is required.');
       return;
     }
-    if (!form.selling_price || Number(form.selling_price) <= 0) {
-    alert('Selling price must be greater than 0.');
-    return;
-  }
-     if (form.stock_quantity !== '' && Number(form.stock_quantity) < 0) {
-    alert('Stock quantity cannot be negative.');
-    return;
-  }
+    const sellingPrice = Number(form.selling_price);
+    const stockQuantity = form.stock_quantity === '' ? 0 : Number(form.stock_quantity);
+
+    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+      alert('Selling price must be greater than 0.');
+      return;
+    }
+    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+      alert('Stock quantity cannot be negative.');
+      return;
+    }
   
     const payload = {
       name: form.name,
@@ -91,27 +102,39 @@ function Products() {
       unit: form.unit,
       size: form.size,
       purchase_price: 0,
-      selling_price: Number(form.selling_price),
-      stock_quantity: Number(form.stock_quantity) || 0,
+      selling_price: sellingPrice,
+      stock_quantity: stockQuantity,
       category_id: null,
     };
 
-    if (editingId) {
-      await window.api.products.update(editingId, payload);
-      alert('Product updated successfully.');
-    } else {
-      await window.api.products.add(payload);
-    }
+    setSaving(true);
+    try {
+      if (editingId) {
+        await window.api.products.update(editingId, payload);
+        alert('Product updated successfully.');
+      } else {
+        await window.api.products.add(payload);
+      }
 
-    setSaving(false);
-    closeModal();
-    await loadProducts();
+      closeModal();
+      await loadProducts();
+    } catch (error) {
+      console.error('Failed to save product:', error);
+      alert(`Could not save product: ${error.message || 'Please try again.'}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    await window.api.products.delete(id);
-    await loadProducts();
+    try {
+      await window.api.products.delete(id);
+      await loadProducts();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      alert(`Could not delete product: ${error.message || 'Please try again.'}`);
+    }
   };
   const filteredProducts = products.filter((product) => {
   const query = search.toLowerCase().trim();

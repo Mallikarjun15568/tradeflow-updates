@@ -26,22 +26,23 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const historyPerPage = 10;
 
   const loadData = async () => {
-    const [customerData, productData, invoiceData] = await Promise.all([
-      window.api.customers.getAll(),
-      window.api.products.getAll(),
-      window.api.billing.getAllInvoices(),
-    ]);
-    setCustomers(customerData);
-    setProducts(productData);
-    setInvoices(invoiceData);
+    try {
+      const [customerData, productData, invoiceData] = await Promise.all([
+        window.api.customers.getAll(),
+        window.api.products.getAll(),
+        window.api.billing.getAllInvoices(),
+      ]);
+      setCustomers(customerData);
+      setProducts(productData);
+      setInvoices(invoiceData);
+    } catch (error) {
+      console.error('Failed to load billing data:', error);
+      setErrorMsg(error.message || 'Could not load billing data.');
+    }
   };
 
   useEffect(() => {
-    const run = async () => {
-      await loadData();
-    };
-
-    void run();
+    void loadData();
   }, []);
 
   const matchedCustomer = customers.find(

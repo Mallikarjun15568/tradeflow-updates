@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Pencil,
@@ -26,6 +26,7 @@ function Customers({onViewCustomer}) {
   const [customerFilter, setCustomerFilter] = useState('all');
   const [creditCustomers, setCreditCustomers] = useState([]);
   const [creditBills, setCreditBills] = useState({});
+  const detailsRequestRef = useRef(0);
   
   useEffect(() => {
     loadCustomers();
@@ -33,7 +34,10 @@ function Customers({onViewCustomer}) {
   }, []);
     
   async function openCustomerDetails(customer) {
+  const requestId = ++detailsRequestRef.current;
   setSelectedCustomer(customer);
+  setCustomerOverview(null);
+  setCustomerTransactions([]);
   setDetailsLoading(true);
 
   try {
@@ -42,16 +46,20 @@ function Customers({onViewCustomer}) {
       window.api.customers.getTransactions(customer.id),
     ]);
 
+    if (requestId !== detailsRequestRef.current) return;
     setCustomerOverview(overview);
     setCustomerTransactions(transactions);
   } catch (error) {
     console.error('Failed to load customer details:', error);
   } finally {
-    setDetailsLoading(false);
+    if (requestId === detailsRequestRef.current) {
+      setDetailsLoading(false);
+    }
   }
 }
 
 function closeCustomerDetails() {
+  ++detailsRequestRef.current;
   setSelectedCustomer(null);
   setCustomerOverview(null);
   setCustomerTransactions([]);
@@ -79,11 +87,17 @@ function closeCustomerDetails() {
   }
   async function loadCustomers() {
     setLoading(true);
-    const data = await window.api.customers.getAll();
-    setCustomers(data);
-    const pages = Math.max(1, Math.ceil(data.length / itemsPerPage));
-    setCurrentPage((p) => Math.min(p, pages));
-    setLoading(false);
+    try {
+      const data = await window.api.customers.getAll();
+      setCustomers(data);
+      const pages = Math.max(1, Math.ceil(data.length / itemsPerPage));
+      setCurrentPage((p) => Math.min(p, pages));
+    } catch (error) {
+      console.error('Failed to load customers:', error);
+      alert('Could not load customers. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const openAddModal = () => {
@@ -109,6 +123,7 @@ function closeCustomerDetails() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
    
     //  Validation
   if (!form.name.trim()) {
@@ -120,31 +135,42 @@ function closeCustomerDetails() {
     alert('Phone number must be exactly 10 digits.');
     return;
   }
-  setSaving(true);
     const payload = {
       name: form.name,
       phone: form.phone,
       address: form.address,
     };
 
-    if (editingId) {
-      await window.api.customers.update(editingId, payload);
-      alert('Customer updated successfully.');
-    } else {
-      await window.api.customers.add(payload);
-    }
+    setSaving(true);
+    try {
+      if (editingId) {
+        await window.api.customers.update(editingId, payload);
+        alert('Customer updated successfully.');
+      } else {
+        await window.api.customers.add(payload);
+      }
 
-    setSaving(false);
-    closeModal();
-    await loadCustomers();
-    await loadCreditCustomers();
+      closeModal();
+      await loadCustomers();
+      await loadCreditCustomers();
+    } catch (error) {
+      console.error('Failed to save customer:', error);
+      alert(`Could not save customer: ${error.message || 'Please try again.'}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    await window.api.customers.delete(id);
-    await loadCustomers();
-    await loadCreditCustomers();
+    try {
+      await window.api.customers.delete(id);
+      await loadCustomers();
+      await loadCreditCustomers();
+    } catch (error) {
+      console.error('Failed to delete customer:', error);
+      alert(`Could not delete customer: ${error.message || 'Please try again.'}`);
+    }
   };
 
 const filteredCustomers = (

@@ -1,9 +1,20 @@
 const db = require('../database/connection');
 
-function getSalesReport(fromDate, toDate, customerId = null) {
-  if (!fromDate || !toDate) {
-    throw new Error('Date range is required');
+function validateDateRange(fromDate, toDate) {
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(fromDate) || !datePattern.test(toDate)) {
+    throw new Error('Dates must use YYYY-MM-DD format');
   }
+
+  const from = new Date(`${fromDate}T00:00:00Z`);
+  const to = new Date(`${toDate}T00:00:00Z`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || fromDate > toDate) {
+    throw new Error('Invalid date range');
+  }
+}
+
+function getSalesReport(fromDate, toDate, customerId = null) {
+  validateDateRange(fromDate, toDate);
 
   const start = `${fromDate} 00:00:00`;
   const end = `${toDate} 23:59:59`;
@@ -56,9 +67,7 @@ function getSalesReport(fromDate, toDate, customerId = null) {
 }
 
 function getSalesReportDetails(fromDate, toDate, customerId = null) {
-  if (!fromDate || !toDate) {
-    throw new Error('Date range is required');
-  }
+  validateDateRange(fromDate, toDate);
 
   const start = `${fromDate} 00:00:00`;
   const end = `${toDate} 23:59:59`;

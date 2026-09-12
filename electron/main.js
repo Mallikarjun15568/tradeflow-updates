@@ -45,16 +45,40 @@ function checkForUpdates() {
 }
 
 ipcMain.handle("billing:quickPrint", (event) => {
-    return new Promise((resolve) => {
-        event.sender.print(
-            {
-                silent: true,
-                printBackground: true,
-            },
-            (success, failureReason) => {
-                resolve({ success, failureReason });
+    return new Promise((resolve, reject) => {
+        if (event.sender.isDestroyed()) {
+            reject(new Error("Print window is no longer available"));
+            return;
+        }
+
+        let settled = false;
+        const timeout = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                reject(new Error("Print timed out. Please try again."));
             }
-        );
+        }, 30000);
+
+        const finish = (callback) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            callback();
+        };
+
+        try {
+            event.sender.print(
+                {
+                    silent: true,
+                    printBackground: true,
+                },
+                (success, failureReason) => {
+                    finish(() => resolve({ success, failureReason }));
+                }
+            );
+        } catch (error) {
+            finish(() => reject(error));
+        }
     });
 });
 

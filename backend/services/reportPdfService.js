@@ -46,6 +46,7 @@ async function generateSalesReportPDF({
       });
 
       stream.on('error', reject);
+      doc.on('error', reject);
 
       doc.pipe(stream);
 

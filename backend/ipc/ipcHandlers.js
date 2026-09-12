@@ -14,6 +14,21 @@ const licenseService = require('../services/licenseService');
 
 function registerIpcHandlers() {
     ipcMain.handle('whatsapp:open', async (event, url) => {
+        if (typeof url !== 'string') {
+            throw new Error('Invalid WhatsApp URL');
+        }
+
+        const parsedUrl = new URL(url);
+        const isAllowed =
+            parsedUrl.protocol === 'https:' &&
+            (parsedUrl.hostname === 'wa.me' ||
+                parsedUrl.hostname === 'api.whatsapp.com' ||
+                parsedUrl.hostname === 'web.whatsapp.com');
+
+        if (!isAllowed) {
+            throw new Error('Only approved WhatsApp URLs can be opened');
+        }
+
         await shell.openExternal(url);
         return { success: true };
     });

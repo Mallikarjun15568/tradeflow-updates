@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { IndianRupee, Receipt, Wallet, CreditCard, RefreshCw, Download } from 'lucide-react';
 
 function formatMoney(value) {
@@ -39,6 +39,8 @@ function Reports() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [error, setError] = useState('');
   const [reportDetails, setReportDetails] = useState([]);
+  const [downloading, setDownloading] = useState(false);
+  const reportRequestRef = useRef(0);
 
   useEffect(() => {
     loadCustomers();
@@ -55,6 +57,10 @@ function Reports() {
     if (fromDate && toDate) {
       loadReport();
     }
+
+    return () => {
+      ++reportRequestRef.current;
+    };
   }, [fromDate, toDate, customerId]);
 
   async function loadCustomers() {
@@ -69,6 +75,7 @@ function Reports() {
   }
 
   async function loadReport() {
+  const requestId = ++reportRequestRef.current;
   try {
     setLoading(true);
     setError('');
@@ -86,17 +93,24 @@ function Reports() {
       ),
     ]);
 
+    if (requestId !== reportRequestRef.current) return;
     setReport(summary);
     setReportDetails(details);
   } catch (err) {
     console.error('Failed to load report:', err);
-    setError(err.message || 'Failed to load report');
+    if (requestId === reportRequestRef.current) {
+      setError(err.message || 'Failed to load report');
+    }
   } finally {
-    setLoading(false);
+    if (requestId === reportRequestRef.current) {
+      setLoading(false);
+    }
   }
 }
 
 async function handleDownloadPDF() {
+  if (downloading) return;
+
   try {
     if (!fromDate || !toDate) {
       setError('Please select date range');
@@ -109,6 +123,7 @@ async function handleDownloadPDF() {
     }
 
     setError('');
+    setDownloading(true);
 
     const result = await window.api.reports.downloadPDF(
       fromDate,
@@ -122,6 +137,8 @@ async function handleDownloadPDF() {
   } catch (err) {
     console.error('Failed to generate PDF:', err);
     setError(err.message || 'Failed to generate PDF');
+  } finally {
+    setDownloading(false);
   }
 }
 
@@ -335,10 +352,11 @@ async function handleDownloadPDF() {
             <button
               type="button"
               onClick={handleDownloadPDF}
-              className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={downloading}
+              className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               <Download size={16} />
-              Download PDF
+              {downloading ? 'Generating PDF...' : 'Download PDF'}
             </button>
           </div>
         </>

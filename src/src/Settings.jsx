@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Save, DatabaseBackup } from 'lucide-react';
 
 
@@ -14,7 +14,16 @@ function Settings() {
   const [backups, setBackups] = useState([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const messageTimersRef = useRef([]);
 
+  useEffect(() => () => {
+    messageTimersRef.current.forEach((timer) => clearTimeout(timer));
+  }, []);
+
+  const clearMessageTimers = () => {
+    messageTimersRef.current.forEach((timer) => clearTimeout(timer));
+    messageTimersRef.current = [];
+  };
 
   useEffect(() => {
     loadSettings();
@@ -23,22 +32,27 @@ function Settings() {
 const loadSettings = async () => {
   setLoading(true);
 
-  const data = await window.api.settings.getAll();
+  try {
+    const data = await window.api.settings.getAll();
 
-  setSettings(data);
+    setSettings(data);
 
-  if (data.last_backup) {
-    setLastBackup(
-      new Date(data.last_backup).toLocaleString('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-    );
-  } else {
-    setLastBackup('');
+    if (data.last_backup) {
+      setLastBackup(
+        new Date(data.last_backup).toLocaleString('en-IN', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      );
+    } else {
+      setLastBackup('');
+    }
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+    alert('Could not load settings. Please try again.');
+  } finally {
+    setLoading(false);
   }
-
-  setLoading(false);
 };
 
   const handleChange = (key, value) => {
@@ -46,15 +60,24 @@ const loadSettings = async () => {
   };
 
   const handleSave = async () => {
+    if (saving) return;
+
     setSaving(true);
     setSavedMsg('');
-    for (const [key, value] of Object.entries(settings)) {
-      if (key === 'invoice_number_next') continue;
-      await window.api.settings.update(key, value);
+    try {
+      for (const [key, value] of Object.entries(settings)) {
+        if (key === 'invoice_number_next') continue;
+        await window.api.settings.update(key, value);
+      }
+      setSavedMsg('Settings saved successfully.');
+      clearMessageTimers();
+      messageTimersRef.current.push(setTimeout(() => setSavedMsg(''), 3000));
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert(`Could not save settings: ${error.message || 'Please try again.'}`);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setSavedMsg('Settings saved successfully.');
-    setTimeout(() => setSavedMsg(''), 3000);
   };
 
   if (loading) {
@@ -208,7 +231,8 @@ const loadSettings = async () => {
                       );
           }
 
-           setTimeout(() => {setBackupMsg('');}, 3000);
+           clearMessageTimers();
+           messageTimersRef.current.push(setTimeout(() => setBackupMsg(''), 3000));
           }
         } catch (error) {
           console.error('Backup failed:', error);

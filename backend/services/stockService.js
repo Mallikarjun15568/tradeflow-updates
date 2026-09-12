@@ -1,6 +1,16 @@
 const db = require("../database/connection");
 
+function validateProductId(product_id) {
+    if (!Number.isInteger(product_id) || product_id <= 0) {
+        throw new Error("Invalid product ID");
+    }
+}
+
 function addStock(product_id, quantity, reason = "restock") {
+    validateProductId(product_id);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error("Stock quantity must be greater than 0");
+    }
     const updateStmt = db.prepare(`
     UPDATE products SET stock_quantity = stock_quantity + @qty WHERE id = @id
   `);
@@ -10,7 +20,10 @@ function addStock(product_id, quantity, reason = "restock") {
   `);
 
     const transaction = db.transaction(() => {
-        updateStmt.run({ qty: quantity, id: product_id });
+        const result = updateStmt.run({ qty: quantity, id: product_id });
+        if (result.changes === 0) {
+            throw new Error("Product not found");
+        }
         logStmt.run({ product_id, change_quantity: quantity, reason });
     });
 
@@ -18,6 +31,10 @@ function addStock(product_id, quantity, reason = "restock") {
 }
 
 function adjustStock(product_id, newQuantity, reason = "adjustment") {
+    validateProductId(product_id);
+    if (!Number.isFinite(newQuantity) || newQuantity < 0) {
+        throw new Error("Stock quantity cannot be negative");
+    }
     const product = db.prepare(`SELECT stock_quantity FROM products WHERE id = ?`).get(product_id);
     if (!product) {
         throw new Error("Product not found");

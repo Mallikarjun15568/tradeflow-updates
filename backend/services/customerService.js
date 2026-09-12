@@ -2,12 +2,16 @@ const db = require("../database/connection");
 
 
 function validateCustomer(customer) {
-  if (customer.phone && !/^\d{10}$/.test(customer.phone.trim())) {
+  if (!customer || typeof customer.name !== 'string' || !customer.name.trim()) {
+    throw new Error('Customer name is required');
+  }
+  if (customer.phone && (typeof customer.phone !== 'string' || !/^\d{10}$/.test(customer.phone.trim()))) {
     throw new Error('Phone number must be exactly 10 digits');
   }
 }
 
 function addCustomer(customer) {
+    validateCustomer(customer);
     const stmt = db.prepare(`
         INSERT INTO customers (name, phone, address)
         VALUES (@name, @phone, @address)
@@ -36,6 +40,7 @@ function getCustomerById(id) {
 }
 
 function updateCustomer(id, customer) {
+    validateCustomer(customer);
     const stmt = db.prepare(`
         UPDATE customers
         SET name = @name,
@@ -44,10 +49,13 @@ function updateCustomer(id, customer) {
         WHERE id = @id
     `);
 
-    stmt.run({
+    const result = stmt.run({
         ...customer,
         id
     });
+    if (result.changes === 0) {
+        throw new Error('Customer not found');
+    }
 }
 function getCreditCustomers() {
     const customers = db.prepare(`
@@ -377,7 +385,10 @@ function deleteCustomer(id) {
         WHERE id = ?
     `);
 
-    stmt.run(id);
+    const result = stmt.run(id);
+    if (result.changes === 0) {
+        throw new Error('Customer not found');
+    }
 }
 
 
