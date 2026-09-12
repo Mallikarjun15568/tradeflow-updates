@@ -6,6 +6,7 @@ const emptyForm = { name: '', unit: 'pcs', selling_price: '', stock_quantity: ''
 function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -33,6 +34,7 @@ function Products() {
 
   async function loadProducts() {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await window.api.products.getAll();
       setProducts(data);
@@ -40,7 +42,7 @@ function Products() {
       setCurrentPage((p) => Math.min(p, pages));
     } catch (error) {
       console.error('Failed to load products:', error);
-      alert('Could not load products. Please try again.');
+      setLoadError('Could not load products. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -109,7 +111,6 @@ function Products() {
     try {
       if (editingId) {
         await window.api.products.update(editingId, payload);
-        alert('Product updated successfully.');
       } else {
         await window.api.products.add(payload);
       }
@@ -157,6 +158,11 @@ const paginatedProducts = filteredProducts.slice(
 
   return (
     <div>
+      {loadError && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+          {loadError}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
   <div>
     <h2 className="text-lg font-semibold text-gray-800">All Products</h2>
