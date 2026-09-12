@@ -223,7 +223,7 @@
 <div
   className="flex-1 grid text-sm"
  style={{
-  gridTemplateColumns: '40px minmax(0, 1fr) 80px 80px 80px 100px',
+   gridTemplateColumns: '40px minmax(0, 1fr) 90px 80px 110px',
 
   gridTemplateRows:
     pageItems.length < ITEMS_PER_PAGE
@@ -256,16 +256,6 @@
     }}
   >
     Particulars
-  </div>
-
-  <div
-    className="px-2 py-1 font-semibold text-center text-gray-700"
-    style={{
-      borderRight: '1px solid #000',
-      borderBottom: '1px solid #000',
-    }}
-  >
-    Size
   </div>
 
   <div
@@ -316,15 +306,6 @@
         }}
       >
         {item.custom_name} 
-      </div>
-
-      <div
-        className="px-2 py-1 text-center text-gray-700"
-        style={{
-          borderRight: '1px solid #000',
-        }}
-      >
-        {item.size || '-'}
       </div>
 
       <div

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 function Billing({ onInvoiceCreated, onViewInvoice }) {
+  const draftKey = 'tradeflow_billing_draft';
   const [activeTab, setActiveTab] = useState('new');
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -11,7 +12,6 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const [customerAddress, setCustomerAddress] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const productInputRef = useRef(null);
-  const [itemSize, setItemSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [rate, setRate] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -23,6 +23,7 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [historyPage, setHistoryPage] = useState(1);
+  const draftLoadedRef = useRef(false);
   const historyPerPage = 10;
 
   const loadData = async () => {
@@ -45,6 +46,85 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(draftKey);
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        setCustomerName(draft.customerName || '');
+        setCustomerPhone(draft.customerPhone || '');
+        setCustomerAddress(draft.customerAddress || '');
+        setProductSearch(draft.productSearch || '');
+        setQuantity(draft.quantity || 1);
+        setRate(draft.rate || '');
+        setDiscount(draft.discount || 0);
+        setItems(Array.isArray(draft.items) ? draft.items : []);
+        setPaymentMethod(draft.paymentMethod || 'cash');
+      }
+    } catch (error) {
+      console.error('Failed to restore billing draft:', error);
+      localStorage.removeItem(draftKey);
+    } finally {
+      draftLoadedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoadedRef.current) return;
+
+    const hasDraft = items.length > 0 || customerName || customerPhone ||
+      customerAddress || productSearch || rate !== '' || Number(discount) !== 0;
+
+    if (!hasDraft) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        customerName,
+        customerPhone,
+        customerAddress,
+        productSearch,
+        quantity,
+        rate,
+        discount,
+        items,
+        paymentMethod,
+      }));
+    } catch (error) {
+      console.error('Failed to save billing draft:', error);
+    }
+  }, [
+    customerName,
+    customerPhone,
+    customerAddress,
+    productSearch,
+    quantity,
+    rate,
+    discount,
+    items,
+    paymentMethod,
+  ]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch (error) {
+      console.error('Failed to clear billing draft:', error);
+    }
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerAddress('');
+    setProductSearch('');
+    setQuantity(1);
+    setRate('');
+    setDiscount(0);
+    setItems([]);
+    setPaymentMethod('cash');
+    setErrorMsg('');
+  };
+
   const matchedCustomer = customers.find(
     (c) => c.name.toLowerCase() === customerName.trim().toLowerCase()
   );
@@ -58,9 +138,6 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     const nextMatch = products.find((p) => p.name.toLowerCase() === value.trim().toLowerCase());
     if (nextMatch) {
       setRate(nextMatch.selling_price);
-      setItemSize(nextMatch.size || '');
-    } else {
-      setItemSize('');
     }
   };
 
@@ -85,14 +162,12 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
         id: Date.now(),
         product_id: matchedProduct ? matchedProduct.id : null,
         name: matchedProduct ? matchedProduct.name : productSearch.trim(),
-        size: itemSize.trim() || (matchedProduct ? matchedProduct.size || '' : ''),
         availableStock: matchedProduct ? matchedProduct.stock_quantity : null,
         qty: Number(quantity),
         rate: Number(rate),
       },
     ]);
     setProductSearch('');
-    setItemSize('');
     setQuantity(1);
     setRate('');
     productInputRef.current?.focus();
@@ -104,10 +179,6 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     setItems(
       items.map((i) => {
         if (i.id !== id) return i;
-        if (field === 'size') {
-          return { ...i, size: value };
-        }
-
         const nextValue = value === '' ? '' : Number(value);
         return { ...i, [field]: nextValue };
       })
@@ -217,11 +288,7 @@ const paginatedInvoices = filteredInvoices.slice(
       });
 
       setItems([]);
-      setCustomerName('');
-      setCustomerPhone('');
-      setCustomerAddress('');
-      setDiscount(0);
-      setPaymentMethod('cash');
+      clearDraft();
       await loadData();
       onInvoiceCreated?.(result.invoiceId);
     } catch (err) {
@@ -252,6 +319,19 @@ const paginatedInvoices = filteredInvoices.slice(
             History
           </button>
         </div>
+        {activeTab === 'new' && items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Discard this draft bill?')) {
+                clearDraft();
+              }
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            Discard Draft
+          </button>
+        )}
       </div>
                    
 {activeTab === 'history' ? (
@@ -498,16 +578,6 @@ const paginatedInvoices = filteredInvoices.slice(
                   ))}
                 </datalist>
               </div>
-              <div className="w-20">
-                <label className="text-xs font-medium text-gray-500 mb-1 block">Size</label>
-                <input
-                  type="text"
-                  placeholder="e.g. M"
-                  value={itemSize}
-                  onChange={(e) => setItemSize(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-              </div>
               <div className="w-24">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Rate</label>
                 <input
@@ -549,17 +619,16 @@ const paginatedInvoices = filteredInvoices.slice(
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
                   <th className="px-6 py-3 font-medium w-10">Sr.</th>
                   <th className="px-2 py-3 font-medium">Product</th>
-                  <th className="px-2 py-3 font-medium">Size</th>
                   <th className="px-2 py-3 font-medium w-28">Rate</th>
                   <th className="px-2 py-3 font-medium w-24">Qty</th>
-                  <th className="px-6 py-3 font-medium text-right">Amount</th>
+                  <th className="px-6 py-3 font-medium text-right w-32">Amount</th>
                   <th className="px-4 py-3 font-medium w-10"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-6 py-10 text-center text-gray-300">
+                    <td colSpan="6" className="px-6 py-10 text-center text-gray-300">
                       No items added yet
                     </td>
                   </tr>
@@ -568,15 +637,6 @@ const paginatedInvoices = filteredInvoices.slice(
                     <tr key={item.id} className="border-b border-gray-100 last:border-0">
                       <td className="px-6 py-2 text-gray-400">{index + 1}</td>
                       <td className="px-2 py-2 text-gray-800 font-medium">{item.name}</td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="text"
-                          value={item.size || ''}
-                          onChange={(e) => updateItem(item.id, 'size', e.target.value)}
-                          placeholder="—"
-                          className="w-16 border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        />
-                      </td>
                       <td className="px-2 py-2">
                         <input
                           type="number"
