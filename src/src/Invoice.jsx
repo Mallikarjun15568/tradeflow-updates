@@ -1,7 +1,7 @@
   import { Fragment, useState, useEffect, useRef } from 'react';
   import { ArrowLeft, Printer, Zap } from 'lucide-react';
 
-  const ITEMS_PER_PAGE = 18;
+  const ITEMS_PER_PAGE = 29;
 
   function formatInvoiceDate(dateString) {
   if (!dateString) return '';
@@ -165,12 +165,15 @@
             return (
               <div
                 key={pageIndex}
-                className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0 print:rounded-none flex flex-col print:h-[20cm] ${
+                className={`invoice-print-page bg-white border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0 flex flex-col ${
                   !isLastPage ? 'print:break-after-page' : ''
                 }`}
               >
                 {/* Header */}
-                <div className="flex justify-between items-start px-6 pt-3 pb-2 border-b-2 border-gray-900">
+                <div
+                  className="flex justify-between items-start px-6 pt-3 pb-2 border-t border-b border-gray-900"
+                  style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000' }}
+                >
                   <div>
                     <div className="text-xl font-bold text-gray-800 tracking-wide">
                       {shopSettings.shop_name || 'WHOLESALE BILLING'}
@@ -183,7 +186,10 @@
                 </div>
 
                 {/* Customer / invoice details */}
-                <div className="flex justify-between px-8 py-3 border-b border-gray-200 text-sm">
+                <div
+                  className="flex justify-between px-8 py-3 border-b border-gray-200 text-sm"
+                  style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000' }}
+                >
                   <div>
                     <div className="text-gray-400 text-xs mb-1">TO,</div>
                     <div className="font-semibold text-gray-800">
@@ -225,7 +231,7 @@
       ? `auto repeat(${pageItems.length}, auto) 1fr`
       : `auto repeat(${pageItems.length}, auto)`,
 
-  border: '2px solid #000',
+  border: '1px solid #000',
   borderBottom: 'none',
   minHeight: 0,
 
@@ -236,8 +242,8 @@
   <div
     className="px-2 py-1 font-semibold text-gray-700"
     style={{
-      borderRight: '1px solid #000',
-      borderBottom: '1px solid #000',
+      borderRight: '1px solid #999',
+      borderBottom: '1px solid #999',
     }}
   >
     Sr.
@@ -246,8 +252,8 @@
   <div
     className="px-3 py-1 font-semibold text-gray-700"
     style={{
-      borderRight: '1px solid #000',
-      borderBottom: '1px solid #000',
+      borderRight: '1px solid #999',
+      borderBottom: '1px solid #999',
     }}
   >
     Particulars
@@ -256,8 +262,8 @@
   <div
     className="px-2 py-1 font-semibold text-center text-gray-700"
     style={{
-      borderRight: '1px solid #000',
-      borderBottom: '1px solid #000',
+      borderRight: '1px solid #999',
+      borderBottom: '1px solid #999',
     }}
   >
     Rate
@@ -266,8 +272,8 @@
   <div
     className="px-2 py-1 font-semibold text-right text-gray-700"
     style={{
-      borderRight: '1px solid #000',
-      borderBottom: '1px solid #000',
+      borderRight: '1px solid #999',
+      borderBottom: '1px solid #999',
     }}
   >
     Qty
@@ -276,7 +282,7 @@
   <div
     className="px-3 py-1 font-semibold text-right text-gray-700"
     style={{
-      borderBottom: '1px solid #000',
+      borderBottom: '1px solid #999',
     }}
   >
     Amount
@@ -288,7 +294,7 @@
       <div
         className="px-2 py-1 text-gray-700"
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
         }}
       >
         {startNumber + idx + 1}
@@ -297,7 +303,7 @@
       <div
         className="px-3 py-1 text-gray-900 font-medium"
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
         }}
       >
         {item.custom_name} 
@@ -306,7 +312,7 @@
       <div
         className="px-2 py-1 text-center text-gray-700"
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
         }}
       >
         {item.price.toFixed(2)}
@@ -315,7 +321,7 @@
       <div
         className="px-2 py-1 text-right text-gray-700"
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
         }}
       >
         {item.quantity}
@@ -334,35 +340,35 @@
     <>
       <div
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
           minHeight: 0,
         }}
       />
 
       <div
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
           minHeight: 0,
         }}
       />
 
       <div
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
           minHeight: 0,
         }}
       />
 
       <div
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
           minHeight: 0,
         }}
       />
 
       <div
         style={{
-          borderRight: '1px solid #000',
+          borderRight: '1px solid #999',
           minHeight: 0,
         }}
       />
@@ -395,7 +401,7 @@
                 )}
 
                 {/* Footer — on every page */}
-                <div className="px-8 pb-5 pt-3 text-xs text-gray-400 border-t border-gray-100">
+                <div className="invoice-footer px-8 pb-5 pt-3 text-xs text-gray-400 border-t border-gray-100">
                   {isLastPage ? (
                     <div className="flex items-end justify-between gap-4">
                       <div>

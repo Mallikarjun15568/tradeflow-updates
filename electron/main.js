@@ -57,7 +57,7 @@ function printCurrentPage(event, silent) {
                 settled = true;
                 reject(new Error("Print timed out. Please try again."));
             }
-        }, 30000);
+        }, silent ? 30000 : 120000);
 
         const finish = (callback) => {
             if (settled) return;
@@ -67,11 +67,29 @@ function printCurrentPage(event, silent) {
         };
 
         try {
+            const printOptions = {
+                silent,
+                printBackground: true,
+            };
+
+            // The normal Windows print dialog should control paper and margins.
+            // Supplying these options there can prevent the dialog callback from
+            // completing on some Windows printer drivers.
+            if (silent) {
+                Object.assign(printOptions, {
+                    pageSize: "A5",
+                    margins: {
+                        marginType: "custom",
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        left: 0,
+                    },
+                });
+            }
+
             event.sender.print(
-                {
-                    silent,
-                    printBackground: true,
-                },
+                printOptions,
                 (success, failureReason) => {
                     finish(() => resolve({ success, failureReason }));
                 }
