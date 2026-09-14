@@ -6,10 +6,9 @@
   function formatInvoiceDate(dateString) {
   if (!dateString) return '';
 
-  const date = new Date(dateString.replace(' ', 'T') + 'Z');
+  const date = new Date(dateString.replace(' ', 'T'));
 
   return date.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
