@@ -57,8 +57,24 @@ function updateProduct(id, product) {
 }
 
 function deleteProduct(id) {
-    const stmt = db.prepare(`DELETE FROM products WHERE id = ?`);
-    stmt.run(id);
+    const deleteTransaction = db.transaction(() => {
+      const usage = db.prepare(`
+        SELECT
+          EXISTS(SELECT 1 FROM invoice_items WHERE product_id = ?) AS invoice_usage,
+          EXISTS(SELECT 1 FROM stock_transactions WHERE product_id = ?) AS stock_usage
+      `).get(id, id);
+
+      if (usage.invoice_usage || usage.stock_usage) {
+        throw new Error('This product cannot be deleted because it has invoice or stock history.');
+      }
+
+      const result = db.prepare(`DELETE FROM products WHERE id = ?`).run(id);
+      if (result.changes === 0) {
+        throw new Error('Product not found');
+      }
+    });
+
+    deleteTransaction();
 }
 
 module.exports = {

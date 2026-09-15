@@ -108,8 +108,9 @@ async function generateSalesReportPDF({
       const summaryTop = doc.y;
       const summaryRows = [
         ['Total Sales', money(report.totalSales)],
-        ['Cash Sales', money(report.cashSales)],
-        ['Credit Sales', money(report.creditSales)],
+        ['Cash Received', money(report.cashSales)],
+        ['Online Received', money(report.onlineSales)],
+        ['Outstanding', money(report.creditSales)],
         ['Total Bills', String(report.totalBills)],
       ];
 
@@ -262,7 +263,7 @@ async function generateSalesReportPDF({
         );
 
         doc.text(
-          invoice.payment_method === 'cash' ? 'Cash' : 'Credit',
+          `Cash: ${money(invoice.cash_received)}\nOnline: ${money(invoice.online_received)}\nDue: ${money(invoice.outstanding)}`,
           columns.payment,
           rowY,
           {
@@ -277,7 +278,7 @@ async function generateSalesReportPDF({
           .lineTo(555, rowY + 16)
           .stroke();
 
-        doc.y = rowY + 22;
+        doc.y = rowY + 36;
       });
 
       // =========================

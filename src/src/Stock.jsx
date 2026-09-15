@@ -1,10 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  PackagePlus,
-  Pencil,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { PackagePlus, Pencil, X, Search } from 'lucide-react';
 
 function Stock() {
   const [products, setProducts] = useState([]);
@@ -16,17 +11,20 @@ function Stock() {
   const [editQuantity, setEditQuantity] = useState('');
   const [editReason, setEditReason] = useState('Stock adjustment');
 
-  const [deleteLoading, setDeleteLoading] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const loadProducts = async () => {
     setLoading(true);
+    setError('');
 
     try {
       const data = await window.api.products.getAll();
       setProducts(data);
     } catch (error) {
       console.error('Failed to load products:', error);
+      setError(error.message || 'Could not load stock.');
     } finally {
       setLoading(false);
     }
@@ -41,9 +39,11 @@ function Stock() {
   // --------------------------------
 
   const handleRestock = async (id) => {
+    setError('');
     const amount = Number(restockAmount[id]);
 
     if (!amount || amount <= 0) {
+      setError('Stock quantity must be greater than 0.');
       return;
     }
 
@@ -62,6 +62,7 @@ function Stock() {
       await loadProducts();
     } catch (error) {
       console.error('Failed to add stock:', error);
+      setError(error.message || 'Failed to add stock.');
     }
   };
 
@@ -81,10 +82,12 @@ function Stock() {
 
   const handleAdjustStock = async () => {
     if (!editingProduct) return;
+    setError('');
 
     const quantity = Number(editQuantity);
 
     if (!Number.isFinite(quantity) || quantity < 0) {
+      setError('Stock quantity cannot be negative.');
       return;
     }
 
@@ -104,39 +107,19 @@ function Stock() {
       await loadProducts();
     } catch (error) {
       console.error('Failed to adjust stock:', error);
+      setError(error.message || 'Failed to adjust stock.');
     } finally {
       setEditLoading(false);
     }
   };
 
-  // --------------------------------
-  // DELETE PRODUCT
-  // --------------------------------
-
-  const handleDelete = async (product) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${product.name}"?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setDeleteLoading(product.id);
-
-      await window.api.products.delete(product.id);
-
-      await loadProducts();
-    } catch (error) {
-      console.error('Failed to delete product:', error);
-    } finally {
-      setDeleteLoading(null);
-    }
-  };
-
   return (
     <div>
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-800">
@@ -146,6 +129,16 @@ function Stock() {
         <p className="text-sm text-gray-500">
           Update stock when new inventory arrives
         </p>
+        <div className="relative w-72 mt-3">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search products..."
+            className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -195,7 +188,10 @@ function Stock() {
                 </td>
               </tr>
             ) : (
-              products.map((product) => (
+              products.filter((product) => {
+                const query = search.trim().toLowerCase();
+                return !query || product.name.toLowerCase().includes(query);
+              }).map((product) => (
 
                 <tr
                   key={product.id}
@@ -272,21 +268,6 @@ function Stock() {
                         className="p-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-blue-600 transition-colors"
                       >
                         <Pencil size={15} />
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDelete(product)
-                        }
-                        disabled={
-                          deleteLoading === product.id
-                        }
-                        title="Delete product"
-                        className="p-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
-                      >
-                        <Trash2 size={15} />
                       </button>
 
                     </div>

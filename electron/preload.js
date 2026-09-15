@@ -1,59 +1,68 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+function invoke(channel, ...args) {
+  return ipcRenderer.invoke(channel, ...args).catch((error) => {
+    const message = String(error?.message || 'Operation failed.')
+      .replace(/^Error invoking remote method '[^']+':\s*Error:\s*/i, '')
+      .replace(/^Error:\s*/i, '');
+    throw new Error(message);
+  });
+}
+
 contextBridge.exposeInMainWorld('api', {
   products: {
-    getAll: () => ipcRenderer.invoke('products:getAll'),
-    add: (product) => ipcRenderer.invoke('products:add', product),
-    update: (id, product) => ipcRenderer.invoke('products:update', id, product),
-    delete: (id) => ipcRenderer.invoke('products:delete', id),
+    getAll: () => invoke('products:getAll'),
+    add: (product) => invoke('products:add', product),
+    update: (id, product) => invoke('products:update', id, product),
+    delete: (id) => invoke('products:delete', id),
   },
   customers: {
-    getAll: () => ipcRenderer.invoke('customers:getAll'),
-    add: (customer) => ipcRenderer.invoke('customers:add', customer),
-    update: (id, customer) => ipcRenderer.invoke('customers:update', id, customer),
-    delete: (id) => ipcRenderer.invoke('customers:delete', id),
-    getOverview: (customerId) => ipcRenderer.invoke('customers:getOverview', customerId),
-    getTransactions: (customerId) => ipcRenderer.invoke('customers:getTransactions', customerId),
-    getCreditCustomers: () => ipcRenderer.invoke('customers:getCreditCustomers'),
-    getCreditBills: (customerId) => ipcRenderer.invoke('customers:getCreditBills', customerId),
-    downloadStatementPDF: (customerId) => ipcRenderer.invoke('customers:downloadStatementPDF', customerId),
+    getAll: () => invoke('customers:getAll'),
+    add: (customer) => invoke('customers:add', customer),
+    update: (id, customer) => invoke('customers:update', id, customer),
+    delete: (id) => invoke('customers:delete', id),
+    getOverview: (customerId) => invoke('customers:getOverview', customerId),
+    getTransactions: (customerId) => invoke('customers:getTransactions', customerId),
+    getCreditCustomers: () => invoke('customers:getCreditCustomers'),
+    getCreditBills: (customerId) => invoke('customers:getCreditBills', customerId),
+    downloadStatementPDF: (customerId) => invoke('customers:downloadStatementPDF', customerId),
   },
   whatsapp: {
-    open: (url) => ipcRenderer.invoke('whatsapp:open', url),
+    open: (url) => invoke('whatsapp:open', url),
   },
   billing: {
-    createInvoice: (invoiceData) => ipcRenderer.invoke('billing:createInvoice', invoiceData),
-    getAllInvoices: () => ipcRenderer.invoke('billing:getAllInvoices'),
-    getInvoiceWithItems: (id) => ipcRenderer.invoke('billing:getInvoiceWithItems', id),
-    addPayment: (invoiceId, amount, method) => ipcRenderer.invoke('billing:addPayment', invoiceId, amount, method),
-    getInvoicePayments: (invoiceId) => ipcRenderer.invoke('billing:getInvoicePayments', invoiceId),
-    print: () => ipcRenderer.invoke('billing:print'),
-    quickPrint: () => ipcRenderer.invoke('billing:quickPrint'),
+    createInvoice: (invoiceData) => invoke('billing:createInvoice', invoiceData),
+    getAllInvoices: () => invoke('billing:getAllInvoices'),
+    getInvoiceWithItems: (id) => invoke('billing:getInvoiceWithItems', id),
+    addPayment: (invoiceId, amount, method) => invoke('billing:addPayment', invoiceId, amount, method),
+    getInvoicePayments: (invoiceId) => invoke('billing:getInvoicePayments', invoiceId),
+    print: () => invoke('billing:print'),
+    quickPrint: () => invoke('billing:quickPrint'),
   },
   dashboard: {
-  getSummary: () => ipcRenderer.invoke('dashboard:getSummary'),
+  getSummary: () => invoke('dashboard:getSummary'),
   },
   stock: {
-    addStock: (productId, quantity, reason) => ipcRenderer.invoke('stock:addStock', productId, quantity, reason),
-      adjustStock: (productId, newQuantity, reason) =>ipcRenderer.invoke('stock:adjustStock',productId,newQuantity,reason),
+    addStock: (productId, quantity, reason) => invoke('stock:addStock', productId, quantity, reason),
+    adjustStock: (productId, newQuantity, reason) => invoke('stock:adjustStock', productId, newQuantity, reason),
   },
   reports: {
     getSalesReport: (fromDate, toDate, customerId = null) =>
-     ipcRenderer.invoke(
+     invoke(
       'reports:getSalesReport',
        fromDate,
        toDate,
        customerId
     ),
     getSalesReportDetails: (fromDate, toDate, customerId = null) =>
-    ipcRenderer.invoke(
+    invoke(
       'reports:getSalesReportDetails',
       fromDate,
       toDate,
       customerId
     ),
     downloadPDF: (fromDate, toDate, customerId = null) =>
-  ipcRenderer.invoke(
+  invoke(
     'reports:downloadPDF',
     fromDate,
     toDate,
@@ -62,21 +71,21 @@ contextBridge.exposeInMainWorld('api', {
 },
 
   settings: {
-  getAll: () => ipcRenderer.invoke('settings:getAll'),
-  update: (key, value) => ipcRenderer.invoke('settings:update', key, value),
+  getAll: () => invoke('settings:getAll'),
+  update: (key, value) => invoke('settings:update', key, value),
 },
   backup: {
 
-    create: () => ipcRenderer.invoke('backup:create'),
-    getAll: () => ipcRenderer.invoke('backup:getAll'),
-    restore: (fileName) => ipcRenderer.invoke('backup:restore', fileName),
+    create: () => invoke('backup:create'),
+    getAll: () => invoke('backup:getAll'),
+    restore: (fileName) => invoke('backup:restore', fileName),
   },
   license: {
-  getDeviceId: () => ipcRenderer.invoke('license:getDeviceId'),
-  getAppVersion: () => ipcRenderer.invoke('license:getAppVersion'),
+  getDeviceId: () => invoke('license:getDeviceId'),
+  getAppVersion: () => invoke('license:getAppVersion'),
 
   activate: (licenseKey, deviceId, appVersion) =>
-    ipcRenderer.invoke(
+    invoke(
       'license:activate',
       licenseKey,
       deviceId,

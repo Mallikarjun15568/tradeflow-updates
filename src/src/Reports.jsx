@@ -38,6 +38,7 @@ function Reports() {
   const [loading, setLoading] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [reportDetails, setReportDetails] = useState([]);
   const [downloading, setDownloading] = useState(false);
   const reportRequestRef = useRef(0);
@@ -79,6 +80,7 @@ function Reports() {
   try {
     setLoading(true);
     setError('');
+    setSuccess('');
 
     const [summary, details] = await Promise.all([
       window.api.reports.getSalesReport(
@@ -131,12 +133,17 @@ async function handleDownloadPDF() {
       customerId || null
     );
 
+    if (result?.canceled) {
+      return;
+    }
+
     if (result?.success) {
-      alert('Sales report PDF saved successfully.');
+      setSuccess('Sales report PDF saved successfully.');
     }
   } catch (err) {
     console.error('Failed to generate PDF:', err);
     setError(err.message || 'Failed to generate PDF');
+    setSuccess('');
   } finally {
     setDownloading(false);
   }
@@ -227,6 +234,11 @@ async function handleDownloadPDF() {
           {error}
         </div>
       )}
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg">
+          {success}
+        </div>
+      )}
 
       {/* Report */}
       {loading ? (
@@ -240,7 +252,7 @@ async function handleDownloadPDF() {
               Sales Summary
             </h3>
 
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
 
               <StatCard
                 title="Total Sales"
@@ -250,14 +262,21 @@ async function handleDownloadPDF() {
               />
 
               <StatCard
-                title="Cash Sales"
+                title="Cash Received"
                 value={formatMoney(report.cashSales)}
                 icon={Wallet}
                 iconClass="bg-green-50 text-green-600"
               />
 
               <StatCard
-                title="Credit Sales"
+                title="Online Received"
+                value={formatMoney(report.onlineSales)}
+                icon={CreditCard}
+                iconClass="bg-blue-50 text-blue-600"
+              />
+
+              <StatCard
+                title="Outstanding"
                 value={formatMoney(report.creditSales)}
                 icon={CreditCard}
                 iconClass="bg-orange-50 text-orange-600"
@@ -291,7 +310,7 @@ async function handleDownloadPDF() {
           <th className="px-5 py-3 font-medium">Customer</th>
           <th className="px-5 py-3 font-medium">Date</th>
           <th className="px-5 py-3 font-medium">Amount</th>
-          <th className="px-5 py-3 font-medium">Payment</th>
+          <th className="px-5 py-3 font-medium">Payment Breakup</th>
         </tr>
       </thead>
 
@@ -328,17 +347,13 @@ async function handleDownloadPDF() {
               </td>
 
               <td className="px-5 py-3.5">
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                    invoice.payment_method === 'cash'
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-orange-50 text-orange-600'
-                  }`}
-                >
-                  {invoice.payment_method === 'cash'
-                    ? 'Cash'
-                    : 'Credit'}
-                </span>
+                <div className="text-xs leading-5">
+                  <div className="text-green-700">Cash: {formatMoney(invoice.cash_received)}</div>
+                  <div className="text-blue-700">Online: {formatMoney(invoice.online_received)}</div>
+                  <div className={Number(invoice.outstanding) > 0 ? 'text-orange-600' : 'text-gray-400'}>
+                    Due: {formatMoney(invoice.outstanding)}
+                  </div>
+                </div>
               </td>
             </tr>
           ))

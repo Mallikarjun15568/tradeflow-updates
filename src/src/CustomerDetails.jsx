@@ -29,6 +29,7 @@ function CustomerDetails({ customerId, onBack }) {
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [sharingStatement, setSharingStatement] = useState(false);
@@ -89,6 +90,7 @@ function CustomerDetails({ customerId, onBack }) {
 
   const openPaymentModal = () => {
     setPaymentAmount('');
+    setPaymentMethod('cash');
     setPaymentError('');
     setShowPaymentModal(true);
   };
@@ -176,7 +178,7 @@ function CustomerDetails({ customerId, onBack }) {
         await window.api.billing.addPayment(
           invoice.id,
           paymentForInvoice,
-          'cash'
+          paymentMethod
         );
 
         remainingPayment -= paymentForInvoice;
@@ -245,7 +247,6 @@ function CustomerDetails({ customerId, onBack }) {
         phone,
         address: editForm.address.trim(),
       });
-      alert('Customer updated successfully.');
       setShowEditModal(false);
       await loadCustomerDetails();
     } catch (error) {
@@ -262,7 +263,7 @@ function CustomerDetails({ customerId, onBack }) {
     try {
       setSharingStatement(true);
       if (!customer.phone) {
-        alert('Customer phone number is not available.');
+        setEditError('Customer phone number is not available.');
         return;
       }
 
@@ -270,7 +271,7 @@ function CustomerDetails({ customerId, onBack }) {
         await window.api.customers.downloadStatementPDF(customer.id);
 
       if (!pdfResult?.success) {
-        alert('Failed to generate customer statement.');
+        setEditError('Failed to generate customer statement.');
         return;
       }
 
@@ -289,7 +290,7 @@ function CustomerDetails({ customerId, onBack }) {
       await window.api.whatsapp.open(whatsappUrl);
     } catch (error) {
       console.error('Failed to share statement:', error);
-      alert('Failed to generate or share statement.');
+      setEditError('Failed to generate or share statement.');
     } finally {
       setSharingStatement(false);
     }
@@ -725,6 +726,18 @@ function CustomerDetails({ customerId, onBack }) {
                 autoFocus
               />
             </div>
+
+            <label className="text-xs font-medium text-gray-500 mt-3 mb-1 block">
+              Payment Method
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="cash">Cash</option>
+              <option value="online">Online</option>
+            </select>
 
             {paymentError && (
               <p className="text-xs text-red-600 mt-2">

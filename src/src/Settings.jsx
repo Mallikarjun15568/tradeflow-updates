@@ -7,6 +7,7 @@ function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [backupMsg, setBackupMsg] = useState('');
   const [lastBackup, setLastBackup] = useState('');
   const [backupLoading, setBackupLoading] = useState(false);
@@ -31,6 +32,7 @@ function Settings() {
 
 const loadSettings = async () => {
   setLoading(true);
+  setErrorMsg('');
 
   try {
     const data = await window.api.settings.getAll();
@@ -49,7 +51,7 @@ const loadSettings = async () => {
     }
   } catch (error) {
     console.error('Failed to load settings:', error);
-    alert('Could not load settings. Please try again.');
+    setErrorMsg('Could not load settings. Please try again.');
   } finally {
     setLoading(false);
   }
@@ -64,6 +66,7 @@ const loadSettings = async () => {
 
     setSaving(true);
     setSavedMsg('');
+    setErrorMsg('');
     try {
       for (const [key, value] of Object.entries(settings)) {
         if (key === 'invoice_number_next') continue;
@@ -74,7 +77,7 @@ const loadSettings = async () => {
       messageTimersRef.current.push(setTimeout(() => setSavedMsg(''), 3000));
     } catch (error) {
       console.error('Failed to save settings:', error);
-      alert(`Could not save settings: ${error.message || 'Please try again.'}`);
+      setErrorMsg(error.message || 'Could not save settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -86,6 +89,11 @@ const loadSettings = async () => {
 
   return (
     <div className="max-w-2xl">
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">
+          {errorMsg}
+        </div>
+      )}
       {savedMsg && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg mb-4">
           {savedMsg}

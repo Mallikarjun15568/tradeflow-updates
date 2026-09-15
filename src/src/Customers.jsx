@@ -12,6 +12,7 @@ const emptyForm = { name: '', phone: '', address: '' };
 function Customers({onViewCustomer}) {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -94,7 +95,7 @@ function closeCustomerDetails() {
       setCurrentPage((p) => Math.min(p, pages));
     } catch (error) {
       console.error('Failed to load customers:', error);
-      alert('Could not load customers. Please try again.');
+      setActionError('Could not load customers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -124,15 +125,16 @@ function closeCustomerDetails() {
 
   const handleSave = async () => {
     if (saving) return;
+    setActionError('');
    
     //  Validation
   if (!form.name.trim()) {
-    alert('Customer name is required.');
+    setActionError('Customer name is required.');
     return;
   }
 
   if (form.phone && !/^\d{10}$/.test(form.phone.trim())) {
-    alert('Phone number must be exactly 10 digits.');
+    setActionError('Phone number must be exactly 10 digits.');
     return;
   }
     const payload = {
@@ -142,10 +144,10 @@ function closeCustomerDetails() {
     };
 
     setSaving(true);
+    setActionError('');
     try {
       if (editingId) {
         await window.api.customers.update(editingId, payload);
-        alert('Customer updated successfully.');
       } else {
         await window.api.customers.add(payload);
       }
@@ -155,7 +157,7 @@ function closeCustomerDetails() {
       await loadCreditCustomers();
     } catch (error) {
       console.error('Failed to save customer:', error);
-      alert(`Could not save customer: ${error.message || 'Please try again.'}`);
+      setActionError(error.message || 'Could not save customer. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -164,12 +166,16 @@ function closeCustomerDetails() {
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
-      await window.api.customers.delete(id);
+      const result = await window.api.customers.delete(id);
+      if (result?.success === false) {
+        setActionError(result.message || 'Could not delete customer.');
+        return;
+      }
       await loadCustomers();
       await loadCreditCustomers();
     } catch (error) {
       console.error('Failed to delete customer:', error);
-      alert(`Could not delete customer: ${error.message || 'Please try again.'}`);
+      setActionError(error.message || 'Could not delete customer. Please try again.');
     }
   };
 
@@ -199,6 +205,11 @@ const filteredCustomers = (
 
   return (
     <div>
+      {actionError && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+          {actionError}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold text-gray-800">Customers</h2>
@@ -399,6 +410,11 @@ const filteredCustomers = (
             </div>
 
             <div className="space-y-3">
+              {actionError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-3 py-2 rounded-lg">
+                  {actionError}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Name</label>
                 <input

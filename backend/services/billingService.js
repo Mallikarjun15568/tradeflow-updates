@@ -15,6 +15,14 @@ function createInvoice(invoiceData) {
   if (!['cash', 'credit'].includes(invoiceData.payment_method)) {
     throw new Error('Invalid payment method');
   }
+  const initialPaymentInput = invoiceData.initial_payment_amount;
+  const initialPaymentMethod = invoiceData.initial_payment_method || 'cash';
+  const hasSplitPayment =
+    invoiceData.initial_cash_amount !== undefined ||
+    invoiceData.initial_online_amount !== undefined;
+  if (!['cash', 'online'].includes(initialPaymentMethod)) {
+    throw new Error('Invalid initial payment method');
+  }
 
   if (customer_id) {
     const customer = customerService.getCustomerById(customer_id);
@@ -133,7 +141,35 @@ function createInvoice(invoiceData) {
       value: nextNumber.toString().padStart(invoiceNumberWidth, '0'),
     });
 
-    const payment_status = invoiceData.payment_method === 'cash' ? 'paid' : 'unpaid';
+    const initialPaymentAmount = initialPaymentInput === undefined ||
+      initialPaymentInput === '' ? (invoiceData.payment_method === 'cash' ? grand_total : 0) :
+      Number(initialPaymentInput);
+    const initialCashAmount = hasSplitPayment
+      ? Number(invoiceData.initial_cash_amount || 0)
+      : (initialPaymentMethod === 'cash' ? initialPaymentAmount : 0);
+    const initialOnlineAmount = hasSplitPayment
+      ? Number(invoiceData.initial_online_amount || 0)
+      : (initialPaymentMethod === 'online' ? initialPaymentAmount : 0);
+    const totalInitialPayment = initialCashAmount + initialOnlineAmount;
+    if (!Number.isFinite(initialCashAmount) || initialCashAmount < 0 ||
+      !Number.isFinite(initialOnlineAmount) || initialOnlineAmount < 0) {
+      throw new Error('Payment amounts cannot be negative');
+    }
+    if (hasSplitPayment && totalInitialPayment > grand_total) {
+      throw new Error('Cash and online payments cannot be greater than the invoice total');
+    }
+    const effectiveInitialPayment = hasSplitPayment ? totalInitialPayment : initialPaymentAmount;
+    if (!Number.isFinite(effectiveInitialPayment) || effectiveInitialPayment < 0) {
+      throw new Error('Invalid initial payment amount');
+    }
+    if (effectiveInitialPayment > grand_total) {
+      throw new Error('Initial payment cannot be greater than the invoice total');
+    }
+    const payment_status = effectiveInitialPayment >= grand_total ? 'paid' :
+      (effectiveInitialPayment > 0 ? 'partial' : 'unpaid');
+    const storedPaymentMethod = effectiveInitialPayment < grand_total
+      ? 'credit'
+      : invoiceData.payment_method;
     const invoiceStmt = db.prepare(`
       INSERT INTO invoices (invoice_number, customer_id, customer_name, customer_address, customer_phone, subtotal, discount, tax, grand_total, payment_method, payment_status)
       VALUES (@invoice_number, @customer_id, @customer_name, @customer_address, @customer_phone, @subtotal, @discount, @tax, @grand_total, @payment_method, @payment_status)
@@ -145,7 +181,7 @@ function createInvoice(invoiceData) {
       subtotal,
       discount: normalizedDiscount,
       tax: normalizedTax,
-      payment_method: invoiceData.payment_method,
+      payment_method: storedPaymentMethod,
       payment_status,
       grand_total
     });
@@ -153,9 +189,20 @@ function createInvoice(invoiceData) {
 
     const paymentStmt = db.prepare(`INSERT INTO payments (invoice_id, amount, method)VALUES (@invoice_id, @amount, @method)`);
 
-      if (invoiceData.payment_method === 'cash') {
-          paymentStmt.run({invoice_id: invoiceId,amount: grand_total,method: 'cash'});
-        }
+    if (initialCashAmount > 0) {
+      paymentStmt.run({
+        invoice_id: invoiceId,
+        amount: initialCashAmount,
+        method: 'cash',
+      });
+    }
+    if (initialOnlineAmount > 0) {
+      paymentStmt.run({
+        invoice_id: invoiceId,
+        amount: initialOnlineAmount,
+        method: 'online',
+      });
+    }
 
     const itemStmt = db.prepare(`
       INSERT INTO invoice_items (invoice_id, product_id, custom_name, size, quantity, price, subtotal)
@@ -188,7 +235,7 @@ function addPayment(invoiceId, amount, method = 'cash') {
     throw new Error('Invalid payment amount');
   }
 
-  if (!['cash'].includes(method)) {
+  if (!['cash', 'online'].includes(method)) {
     throw new Error('Invalid payment method');
   }
 

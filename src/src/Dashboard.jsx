@@ -152,6 +152,11 @@ function Dashboard() {
               <p className="text-2xl font-semibold text-gray-800 mt-2">
                 {formatAmount(stats.cashReceived)}
               </p>
+              {Number(stats.onlineReceived || 0) > 0 && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Online: {formatAmount(stats.onlineReceived)}
+                </p>
+              )}
             </div>
 
             <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">

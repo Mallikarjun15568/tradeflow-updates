@@ -7,6 +7,7 @@ function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [formError, setFormError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -53,6 +54,7 @@ function Products() {
     setForm(emptyForm);
     setEditingSize(null);
     setShowCustomUnit(false);
+    setFormError('');
     setShowModal(true);
   };
 
@@ -68,6 +70,7 @@ function Products() {
       stock_quantity: product.stock_quantity,
     });
     setShowModal(true);
+    setFormError('');
   };
 
   const closeModal = () => {
@@ -75,24 +78,25 @@ function Products() {
     setEditingId(null);
     setEditingSize(null);
     setForm(emptyForm);
+    setFormError('');
   };
 
   const handleSave = async () => {
     if (saving) return;
 
     if (!form.name.trim()){
-      alert('Product name is required.');
+      setFormError('Product name is required.');
       return;
     }
     const sellingPrice = Number(form.selling_price);
     const stockQuantity = form.stock_quantity === '' ? 0 : Number(form.stock_quantity);
 
     if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
-      alert('Selling price must be greater than 0.');
+      setFormError('Selling price must be greater than 0.');
       return;
     }
     if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
-      alert('Stock quantity cannot be negative.');
+      setFormError('Stock quantity cannot be negative.');
       return;
     }
   
@@ -108,6 +112,7 @@ function Products() {
     };
 
     setSaving(true);
+    setFormError('');
     try {
       if (editingId) {
         await window.api.products.update(editingId, payload);
@@ -119,7 +124,7 @@ function Products() {
       await loadProducts();
     } catch (error) {
       console.error('Failed to save product:', error);
-      alert(`Could not save product: ${error.message || 'Please try again.'}`);
+      setFormError(error.message || 'Could not save product. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -128,11 +133,15 @@ function Products() {
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     try {
-      await window.api.products.delete(id);
+      const result = await window.api.products.delete(id);
+      if (result?.success === false) {
+        setLoadError(result.message || 'Could not delete product.');
+        return;
+      }
       await loadProducts();
     } catch (error) {
       console.error('Failed to delete product:', error);
-      alert(`Could not delete product: ${error.message || 'Please try again.'}`);
+      setLoadError(error.message || 'Could not delete product. Please try again.');
     }
   };
   const filteredProducts = products.filter((product) => {
@@ -289,6 +298,11 @@ const paginatedProducts = filteredProducts.slice(
             </div>
 
             <div className="space-y-3">
+              {formError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-3 py-2 rounded-lg">
+                  {formError}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Name</label>
                 <input

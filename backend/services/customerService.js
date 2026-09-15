@@ -69,7 +69,6 @@ function getCreditCustomers() {
                 SELECT SUM(i.grand_total)
                 FROM invoices i
                 WHERE i.customer_id = c.id
-                  AND i.payment_method = 'credit'
             ), 0) AS total_credit,
 
             COALESCE((
@@ -78,7 +77,6 @@ function getCreditCustomers() {
                 INNER JOIN invoices i
                     ON i.id = p.invoice_id
                 WHERE i.customer_id = c.id
-                  AND i.payment_method = 'credit'
             ), 0) AS total_paid
 
         FROM customers c
@@ -126,7 +124,6 @@ function getCustomerCreditBills(customerId) {
 
         FROM invoices i
         WHERE i.customer_id = ?
-          AND i.payment_method = 'credit'
         ORDER BY i.invoice_date ASC
     `).all(customerId);
 
@@ -164,7 +161,6 @@ function getCustomerPaymentSummary(customerId) {
             COALESCE(SUM(i.grand_total), 0) AS total_credit
         FROM invoices i
         WHERE i.customer_id = ?
-          AND i.payment_method = 'credit'
     `).get(customerId);
 
     /*
@@ -177,7 +173,6 @@ function getCustomerPaymentSummary(customerId) {
         INNER JOIN invoices i
             ON i.id = p.invoice_id
         WHERE i.customer_id = ?
-          AND i.payment_method = 'credit'
     `).get(customerId);
 
     const totalCredit = Number(creditResult.total_credit || 0);
@@ -214,13 +209,11 @@ function getCustomerOverview(customerId) {
         SELECT
             COALESCE(SUM(i.grand_total), 0) AS total_sales,
 
-            COALESCE(SUM(
-                CASE
-                    WHEN i.payment_method = 'credit'
-                    THEN i.grand_total
-                    ELSE 0
-                END
-            ), 0) AS total_credit,
+            COALESCE(SUM(i.grand_total - COALESCE((
+                SELECT SUM(p.amount)
+                FROM payments p
+                WHERE p.invoice_id = i.id
+            ), 0)), 0) AS total_credit,
 
             COUNT(i.id) AS total_bills
 
@@ -234,38 +227,19 @@ function getCustomerOverview(customerId) {
      *
      * Cash invoices are already fully received.
      */
-    const cashResult = db.prepare(`
-        SELECT
-            COALESCE(SUM(i.grand_total), 0) AS total_cash
-        FROM invoices i
-        WHERE i.customer_id = ?
-          AND i.payment_method = 'cash'
-    `).get(customerId);
-
-
-    /*
-     * CREDIT PAYMENTS
-     *
-     * Only actual payments recorded against credit invoices.
-     */
-    const creditPaymentResult = db.prepare(`
-        SELECT
-            COALESCE(SUM(p.amount), 0) AS total_credit_received
+    const receivedResult = db.prepare(`
+        SELECT COALESCE(SUM(p.amount), 0) AS total_received
         FROM payments p
-        INNER JOIN invoices i
-            ON i.id = p.invoice_id
+        INNER JOIN invoices i ON i.id = p.invoice_id
         WHERE i.customer_id = ?
-          AND i.payment_method = 'credit'
     `).get(customerId);
+
 
 
     const totalSales = Number(salesResult.total_sales || 0);
     const totalCredit = Number(salesResult.total_credit || 0);
 
-    const totalCash = Number(cashResult.total_cash || 0);
-
-    const creditReceived =
-        Number(creditPaymentResult.total_credit_received || 0);
+    const totalReceivedFromPayments = Number(receivedResult.total_received || 0);
 
 
     /*
@@ -274,7 +248,7 @@ function getCustomerOverview(customerId) {
      * Cash sales are automatically received.
      * Credit sales are received only when a payment is recorded.
      */
-    const totalReceived = totalCash + creditReceived;
+    const totalReceived = totalReceivedFromPayments;
 
 
     /*
@@ -284,7 +258,7 @@ function getCustomerOverview(customerId) {
      */
     const balanceDue = Math.max(
         0,
-        totalCredit - creditReceived
+        totalSales - totalReceived
     );
 
 
@@ -380,15 +354,26 @@ function getCustomerTransactions(customerId) {
    ========================================================= */
 
 function deleteCustomer(id) {
-    const stmt = db.prepare(`
-        DELETE FROM customers
-        WHERE id = ?
-    `);
+    const deleteTransaction = db.transaction(() => {
+        const usage = db.prepare(`
+          SELECT EXISTS(SELECT 1 FROM invoices WHERE customer_id = ?) AS invoice_usage
+        `).get(id);
 
-    const result = stmt.run(id);
-    if (result.changes === 0) {
-        throw new Error('Customer not found');
-    }
+        if (usage.invoice_usage) {
+            throw new Error('This customer cannot be deleted because invoice history exists.');
+        }
+
+        const result = db.prepare(`
+            DELETE FROM customers
+            WHERE id = ?
+        `).run(id);
+
+        if (result.changes === 0) {
+            throw new Error('Customer not found');
+        }
+    });
+
+    deleteTransaction();
 }
 
 

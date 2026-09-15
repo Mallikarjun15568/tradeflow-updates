@@ -17,8 +17,11 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const [discount, setDiscount] = useState(0);
   const [items, setItems] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cashAmount, setCashAmount] = useState('');
+  const [onlineAmount, setOnlineAmount] = useState('');
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [paymentErrorMsg, setPaymentErrorMsg] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -60,6 +63,8 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
         setDiscount(draft.discount || 0);
         setItems(Array.isArray(draft.items) ? draft.items : []);
         setPaymentMethod(draft.paymentMethod || 'cash');
+        setCashAmount(draft.cashAmount || '');
+        setOnlineAmount(draft.onlineAmount || '');
       }
     } catch (error) {
       console.error('Failed to restore billing draft:', error);
@@ -73,7 +78,8 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     if (!draftLoadedRef.current) return;
 
     const hasDraft = items.length > 0 || customerName || customerPhone ||
-      customerAddress || productSearch || rate !== '' || Number(discount) !== 0;
+      customerAddress || productSearch || rate !== '' || Number(discount) !== 0 ||
+      cashAmount !== '' || onlineAmount !== '';
 
     if (!hasDraft) {
       localStorage.removeItem(draftKey);
@@ -91,6 +97,8 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
         discount,
         items,
         paymentMethod,
+        cashAmount,
+        onlineAmount,
       }));
     } catch (error) {
       console.error('Failed to save billing draft:', error);
@@ -105,6 +113,8 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     discount,
     items,
     paymentMethod,
+    cashAmount,
+    onlineAmount,
   ]);
 
   const clearDraft = () => {
@@ -122,7 +132,10 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     setDiscount(0);
     setItems([]);
     setPaymentMethod('cash');
+    setCashAmount('');
+    setOnlineAmount('');
     setErrorMsg('');
+    setPaymentErrorMsg('');
   };
 
   const matchedCustomer = customers.find(
@@ -139,6 +152,11 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
     if (nextMatch) {
       setRate(nextMatch.selling_price);
     }
+  };
+
+  const handlePaymentMethodChange = (method) => {
+    setPaymentMethod(method);
+    setPaymentErrorMsg('');
   };
 
   const handleAddItem = () => {
@@ -187,6 +205,14 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
 
   const subTotal = items.reduce((sum, i) => sum + i.qty * i.rate, 0);
   const grandTotal = subTotal - Number(discount || 0);
+  const normalizedCashAmount = cashAmount === '' ? 0 : Number(cashAmount);
+  const normalizedOnlineAmount = onlineAmount === '' ? 0 : Number(onlineAmount);
+  const effectiveCashAmount =
+    paymentMethod === 'cash'
+      ? Math.max(0, grandTotal - normalizedOnlineAmount)
+      : normalizedCashAmount;
+  const totalReceived = effectiveCashAmount + normalizedOnlineAmount;
+  const remainingAmount = grandTotal - totalReceived;
 
   //History filters
   const filteredInvoices = invoices.filter((inv) => {
@@ -225,6 +251,7 @@ const paginatedInvoices = filteredInvoices.slice(
 
   const handleCreateInvoice = async () => {
     setErrorMsg('');
+    setPaymentErrorMsg('');
 
     const invalidItem = items.find(
       (i) => !i.qty || i.qty <= 0 || i.rate === '' || i.rate < 0
@@ -242,6 +269,17 @@ const paginatedInvoices = filteredInvoices.slice(
        setErrorMsg('Discount cannot be greater than the subtotal.');
        return;
       }
+    const defaultCashAmount =
+      paymentMethod === 'cash'
+        ? Math.max(0, grandTotal - normalizedOnlineAmount)
+        : normalizedCashAmount;
+    const finalTotalReceived = defaultCashAmount + normalizedOnlineAmount;
+    if (!Number.isFinite(defaultCashAmount) || defaultCashAmount < 0 ||
+      !Number.isFinite(normalizedOnlineAmount) || normalizedOnlineAmount < 0 ||
+      finalTotalReceived > grandTotal) {
+      setPaymentErrorMsg('Cash and online payments cannot be greater than the invoice total.');
+      return;
+    }
   if (customerPhone && !/^\d{10}$/.test(customerPhone.trim())) {
     setErrorMsg('Mobile number must be exactly 10 digits.');
     return;
@@ -263,7 +301,6 @@ const paginatedInvoices = filteredInvoices.slice(
               phone: customerPhone.trim(),
               address: customerAddress.trim(),
             });
-            alert('Customer updated successfully.');
           }
         } else {
           // New customer typed — create it automatically
@@ -285,6 +322,8 @@ const paginatedInvoices = filteredInvoices.slice(
         })),
         discount: Number(discount || 0),
         payment_method: paymentMethod,
+        initial_cash_amount: defaultCashAmount,
+        initial_online_amount: normalizedOnlineAmount,
       });
 
       setItems([]);
@@ -322,11 +361,7 @@ const paginatedInvoices = filteredInvoices.slice(
         {activeTab === 'new' && items.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Discard this draft bill?')) {
-                clearDraft();
-              }
-            }}
+            onClick={clearDraft}
             className="text-sm text-red-600 hover:text-red-700"
           >
             Discard Draft
@@ -673,45 +708,108 @@ const paginatedInvoices = filteredInvoices.slice(
             </table>
           </div>
 
-          <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center gap-6">
-              <div>
-                <span className="text-xs text-gray-500 block">Sub Total</span>
-                <span className="text-sm text-gray-700">₹{subTotal.toFixed(2)}</span>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                <span className="text-xs font-medium text-gray-500 block">Sub Total</span>
+                <span className="text-lg font-semibold text-gray-800 mt-1 block">
+                  ₹{subTotal.toFixed(2)}
+                </span>
               </div>
-              <div>
-                <span className="text-xs text-gray-500 block mb-1">Discount</span>
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                <label className="text-xs font-medium text-gray-500 block mb-2">Discount</label>
                 <input
                   type="number"
                   min="0"
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value)}
-                  className="w-20 border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              <div>
-                <span className="text-xs text-gray-500 block mb-1">Payment Method</span>
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                <label className="text-xs font-medium text-gray-500 block mb-2">Payment Method</label>
                 <select
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-20 border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  onChange={(e) => handlePaymentMethodChange(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 >
                   <option value="cash">Cash</option>
                   <option value="credit">Credit</option>
                 </select>
               </div>
-              <div>
-                <span className="text-xs text-gray-500 block">Grand Total</span>
-                <span className="text-xl font-bold text-gray-800">₹{grandTotal.toFixed(2)}</span>
+              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+                <span className="text-xs font-medium text-gray-500 block mb-2">Payment Summary</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Received</span>
+                  <span className="font-semibold text-gray-800">₹{totalReceived.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-500">Remaining</span>
+                  <span className={`font-semibold ${remainingAmount > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                    ₹{Math.max(0, remainingAmount).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={handleCreateInvoice}
-              disabled={items.length === 0 || creating}
-              className="bg-blue-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
-            >
-              {creating ? 'Creating...' : 'Create Invoice'}
-            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="rounded-lg border border-green-100 bg-green-50/50 p-4">
+                <label className="text-xs font-medium text-green-700 block mb-2">Cash Received</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={grandTotal}
+                  value={paymentMethod === 'cash'
+                    ? Math.max(0, grandTotal - normalizedOnlineAmount)
+                    : cashAmount}
+                  readOnly={paymentMethod === 'cash'}
+                  onChange={(e) => {
+                    if (paymentMethod !== 'cash') {
+                      setCashAmount(e.target.value);
+                    }
+                    setPaymentErrorMsg('');
+                  }}
+                  placeholder="0.00"
+                  className={`w-full border border-green-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
+                    paymentMethod === 'cash' ? 'bg-green-100/70 text-gray-600 cursor-not-allowed' : 'bg-white'
+                  }`}
+                />
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
+                <label className="text-xs font-medium text-blue-700 block mb-2">Online Received</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={grandTotal}
+                  value={onlineAmount}
+                  onChange={(e) => {
+                    setOnlineAmount(e.target.value);
+                    setPaymentErrorMsg('');
+                  }}
+                  placeholder="0.00"
+                  className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+            {paymentErrorMsg && (
+              <div className="mt-3 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+                {paymentErrorMsg}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-5 pt-5 border-t border-gray-100">
+              <div>
+                <span className="text-xs text-gray-500 block">Grand Total</span>
+                <span className="text-2xl font-bold text-gray-900">₹{grandTotal.toFixed(2)}</span>
+              </div>
+              <button
+                onClick={handleCreateInvoice}
+                disabled={items.length === 0 || creating}
+                className="bg-blue-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                {creating ? 'Creating Invoice...' : 'Create Invoice'}
+              </button>
+            </div>
           </div>
         </>
       )}

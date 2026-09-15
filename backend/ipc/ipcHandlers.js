@@ -58,13 +58,33 @@ function registerIpcHandlers() {
     ipcMain.handle('products:getAll', () => productService.getAllProducts());
     ipcMain.handle('products:add', (event, product) => productService.addProduct(product));
     ipcMain.handle('products:update', (event, id, product) => productService.updateProduct(id, product));
-    ipcMain.handle('products:delete', (event, id) => productService.deleteProduct(id));
+    ipcMain.handle('products:delete', (event, id) => {
+        try {
+            productService.deleteProduct(id);
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                message: error.message || 'Could not delete product.',
+            };
+        }
+    });
 
     // Customers
     ipcMain.handle('customers:getAll', () => customerService.getAllCustomers());
     ipcMain.handle('customers:add', (event, customer) => customerService.addCustomer(customer));
     ipcMain.handle('customers:update', (event, id, customer) => customerService.updateCustomer(id, customer));
-    ipcMain.handle('customers:delete', (event, id) => customerService.deleteCustomer(id));
+    ipcMain.handle('customers:delete', (event, id) => {
+        try {
+            customerService.deleteCustomer(id);
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                message: error.message || 'Could not delete customer.',
+            };
+        }
+    });
     ipcMain.handle('customers:getPaymentSummary', (event, customerId) => customerService.getCustomerPaymentSummary(customerId));
     ipcMain.handle('customers:getOverview',(event, customerId) => customerService.getCustomerOverview(customerId));
     ipcMain.handle('customers:getTransactions',(event, customerId) => customerService.getCustomerTransactions(customerId));

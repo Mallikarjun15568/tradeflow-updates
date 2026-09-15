@@ -6,15 +6,9 @@ function getDashboardSummary() {
     timeZone: 'Asia/Kolkata',
   }).format(new Date());
 
-  // SQLite invoice_date is stored as UTC:
-  // YYYY-MM-DD HH:mm:ss
-  // So compare using UTC date range for today's IST day.
-
-  const start = new Date(`${today}T00:00:00+05:30`);
-  const end = new Date(`${today}T23:59:59+05:30`);
-
-  const startUTC = start.toISOString().slice(0, 19).replace('T', ' ');
-  const endUTC = end.toISOString().slice(0, 19).replace('T', ' ');
+  // invoice_date is stored as an India-local SQLite timestamp.
+  const startUTC = `${today} 00:00:00`;
+  const endUTC = `${today} 23:59:59`;
 
   // Today's total sales
   const sales = db.prepare(`
@@ -23,20 +17,30 @@ function getDashboardSummary() {
     WHERE invoice_date BETWEEN ? AND ?
   `).get(startUTC, endUTC);
 
-  // Today's cash sales
+  // Cash received today is based on recorded payments, not invoice totals.
   const cash = db.prepare(`
-    SELECT COALESCE(SUM(grand_total), 0) AS total
-    FROM invoices
-    WHERE payment_method = 'cash'
-      AND invoice_date BETWEEN ? AND ?
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM payments
+    WHERE method = 'cash'
+      AND payment_date BETWEEN ? AND ?
   `).get(startUTC, endUTC);
 
-  // Today's credit sales
+  const online = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM payments
+    WHERE method = 'online'
+      AND payment_date BETWEEN ? AND ?
+  `).get(startUTC, endUTC);
+
+  // Today's outstanding amount from today's invoices after recorded payments.
   const credit = db.prepare(`
-    SELECT COALESCE(SUM(grand_total), 0) AS total
-    FROM invoices
-    WHERE payment_method = 'credit'
-      AND invoice_date BETWEEN ? AND ?
+    SELECT COALESCE(SUM(i.grand_total - COALESCE((
+      SELECT SUM(p.amount)
+      FROM payments p
+      WHERE p.invoice_id = i.id
+    ), 0)), 0) AS total
+    FROM invoices i
+    WHERE i.invoice_date BETWEEN ? AND ?
   `).get(startUTC, endUTC);
 
   // Today's bill count
@@ -61,19 +65,18 @@ function getDashboardSummary() {
     LIMIT 8
   `).all();
 
-  // Today's payments
-  // Currently cash invoices represent received amount.
+  // Today's cash payments
   const todayPayments = db.prepare(`
     SELECT
-      invoice_number,
-      customer_name,
-      grand_total AS amount,
-      payment_method,
-      invoice_date
-    FROM invoices
-    WHERE payment_method = 'cash'
-      AND invoice_date BETWEEN ? AND ?
-    ORDER BY invoice_date DESC
+      i.invoice_number,
+      i.customer_name,
+      p.amount,
+      p.method AS payment_method,
+      p.payment_date AS invoice_date
+    FROM payments p
+    INNER JOIN invoices i ON i.id = p.invoice_id
+    WHERE p.payment_date BETWEEN ? AND ?
+    ORDER BY p.payment_date DESC
     LIMIT 8
   `).all(startUTC, endUTC);
 
@@ -97,6 +100,7 @@ function getDashboardSummary() {
     stats: {
       todaySales: Number(sales.total || 0),
       cashReceived: Number(cash.total || 0),
+      onlineReceived: Number(online.total || 0),
       creditSales: Number(credit.total || 0),
       todayBills: Number(bills.count || 0),
     },
