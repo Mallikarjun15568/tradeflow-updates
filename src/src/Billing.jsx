@@ -269,7 +269,11 @@ const paginatedInvoices = filteredInvoices.slice(
        setErrorMsg('Discount cannot be greater than the subtotal.');
        return;
       }
-    const defaultCashAmount =
+     if (paymentMethod === 'credit' && !customerName.trim()) {
+       setErrorMsg('Customer name is required for a credit bill.');
+       return;
+     }
+     const defaultCashAmount =
       paymentMethod === 'cash'
         ? Math.max(0, grandTotal - normalizedOnlineAmount)
         : normalizedCashAmount;
@@ -594,6 +598,11 @@ const paginatedInvoices = filteredInvoices.slice(
             {customerName.trim() && !matchedCustomer && (
               <div className="mb-4 text-xs text-blue-600">New customer — will be added automatically</div>
             )}
+            {paymentMethod === 'credit' && !customerName.trim() && (
+              <div className="mb-4 text-xs text-orange-600">
+                Customer name is required for a credit bill.
+              </div>
+            )}
 
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[180px]">
@@ -803,7 +812,10 @@ const paginatedInvoices = filteredInvoices.slice(
                 <span className="text-2xl font-bold text-gray-900">₹{grandTotal.toFixed(2)}</span>
               </div>
               <button
-                onClick={handleCreateInvoice}
+                type="button"
+                onClick={() => {
+                  void handleCreateInvoice();
+                }}
                 disabled={items.length === 0 || creating}
                 className="bg-blue-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
               >

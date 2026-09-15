@@ -170,6 +170,9 @@ function createInvoice(invoiceData) {
     const storedPaymentMethod = effectiveInitialPayment < grand_total
       ? 'credit'
       : invoiceData.payment_method;
+    if (storedPaymentMethod === 'credit' && !effectiveCustomerId) {
+      throw new Error('Customer is required for a credit invoice');
+    }
     const invoiceStmt = db.prepare(`
       INSERT INTO invoices (invoice_number, customer_id, customer_name, customer_address, customer_phone, subtotal, discount, tax, grand_total, payment_method, payment_status)
       VALUES (@invoice_number, @customer_id, @customer_name, @customer_address, @customer_phone, @subtotal, @discount, @tax, @grand_total, @payment_method, @payment_status)
@@ -333,7 +336,18 @@ function getInvoicePayments(invoiceId) {
 }
 
 function getInvoiceWithItems(invoiceId) {
-  const invoice = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(invoiceId);
+  const invoice = db.prepare(`
+    SELECT
+      i.*,
+      COALESCE(SUM(CASE WHEN p.method = 'cash' THEN p.amount ELSE 0 END), 0) AS cash_received,
+      COALESCE(SUM(CASE WHEN p.method = 'online' THEN p.amount ELSE 0 END), 0) AS online_received,
+      COALESCE(SUM(p.amount), 0) AS total_paid,
+      i.grand_total - COALESCE(SUM(p.amount), 0) AS amount_due
+    FROM invoices i
+    LEFT JOIN payments p ON p.invoice_id = i.id
+    WHERE i.id = ?
+    GROUP BY i.id
+  `).get(invoiceId);
 
   if (!invoice) {
     throw new Error(`Invoice ID ${invoiceId} not found`);

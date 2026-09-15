@@ -2,6 +2,7 @@
   import { ArrowLeft, Printer, Zap } from 'lucide-react';
 
   const ITEMS_PER_PAGE = 29;
+  const LAST_PAGE_ITEM_LIMIT = 24;
 
   function formatInvoiceDate(dateString) {
   if (!dateString) return '';
@@ -121,6 +122,14 @@
     }
     if (pages.length === 0) pages.push([]);
 
+    // Keep full item pages. If the final page is full, use a separate totals page.
+    const lastPage = pages[pages.length - 1];
+    if (pages.length === 1 && lastPage.length > LAST_PAGE_ITEM_LIMIT) {
+      pages.push([]);
+    } else if (pages.length > 1 && lastPage.length > LAST_PAGE_ITEM_LIMIT) {
+      pages.push(lastPage.splice(LAST_PAGE_ITEM_LIMIT));
+    }
+
     return (
       <div>
         <div className="flex items-center justify-between mb-6 print:hidden">
@@ -159,7 +168,9 @@
         <div id="invoice-print-area" className="max-w-3xl mx-auto print:max-w-none space-y-6 print:space-y-0">
           {pages.map((pageItems, pageIndex) => {
             const isLastPage = pageIndex === pages.length - 1;
-            const startNumber = pageIndex * ITEMS_PER_PAGE;
+            const startNumber = pages
+              .slice(0, pageIndex)
+              .reduce((total, page) => total + page.length, 0);
 
             return (
               <div
@@ -334,7 +345,7 @@
     </Fragment>
   ))}
 
-  {/* Remaining blank area — ONLY when fewer than 20 items */}
+  {/* Remaining blank area on the final item page */}
   {pageItems.length < ITEMS_PER_PAGE && (
     <>
       <div
@@ -372,7 +383,6 @@
         }}
       />
 
-      <div />
     </>
   )}
 </div>
@@ -394,6 +404,22 @@
                           <td className="px-3 py-1.5 border-r border-gray-800">GRAND TOTAL</td>
                           <td className="px-3 py-1.5 text-right">{invoice.grand_total.toFixed(2)}</td>
                         </tr>
+                        {invoice.payment_method === 'credit' && (
+                          <>
+                            <tr>
+                              <td className="px-3 py-1.5 text-gray-600 border-r border-gray-800">Cash Received</td>
+                              <td className="px-3 py-1.5 text-right">{Number(invoice.cash_received || 0).toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                              <td className="px-3 py-1.5 text-gray-600 border-r border-gray-800">Online Received</td>
+                              <td className="px-3 py-1.5 text-right">{Number(invoice.online_received || 0).toFixed(2)}</td>
+                            </tr>
+                            <tr className="font-bold text-orange-700">
+                              <td className="px-3 py-1.5 border-r border-gray-800">DUE</td>
+                              <td className="px-3 py-1.5 text-right">{Math.max(0, Number(invoice.amount_due || 0)).toFixed(2)}</td>
+                            </tr>
+                          </>
+                        )}
                       </tbody>
                     </table>
                   </div>
