@@ -170,7 +170,7 @@ function createInvoice(invoiceData) {
     const storedPaymentMethod = effectiveInitialPayment < grand_total
       ? 'credit'
       : invoiceData.payment_method;
-    if (storedPaymentMethod === 'credit' && !effectiveCustomerId) {
+    if (invoiceData.payment_method === 'credit' && !effectiveCustomerId) {
       throw new Error('Customer is required for a credit invoice');
     }
     const invoiceStmt = db.prepare(`
@@ -361,22 +361,34 @@ function updateInvoice(invoiceId, invoiceData) {
       throw new Error('Invalid discount');
     }
     const grandTotal = subtotal - discount;
-    const paid = db.prepare(`
+    const existingPaid = Number(db.prepare(`
       SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE invoice_id = ?
-    `).get(invoiceId).total;
-    if (Number(paid) > grandTotal) {
-      throw new Error('Invoice total cannot be less than payments already received');
-    }
+    `).get(invoiceId).total || 0);
 
     const requestedPaymentMethod = invoiceData.payment_method || invoice.payment_method;
     const customerId = invoiceData.customer_id ?? invoice.customer_id;
-    const paymentMethod = Number(paid) < grandTotal ? 'credit' : requestedPaymentMethod;
+    const paymentMethod = requestedPaymentMethod;
     if (!['cash', 'credit'].includes(paymentMethod)) {
       throw new Error('Invalid payment method');
     }
-    if (paymentMethod === 'credit' && !customerId) {
+    if (requestedPaymentMethod === 'credit' && !customerId) {
       throw new Error('Customer is required for a credit invoice');
     }
+    const requestedCashAmount = Number(invoiceData.initial_cash_amount || 0);
+    const requestedOnlineAmount = Number(invoiceData.initial_online_amount || 0);
+    if (!Number.isFinite(requestedCashAmount) || requestedCashAmount < 0 ||
+      !Number.isFinite(requestedOnlineAmount) || requestedOnlineAmount < 0) {
+      throw new Error('Payment amounts cannot be negative');
+    }
+    const requestedTotalPayment = requestedCashAmount + requestedOnlineAmount;
+    if (requestedTotalPayment > grandTotal) {
+      throw new Error('Cash and online payments cannot be greater than the invoice total');
+    }
+    if (requestedPaymentMethod !== 'credit' &&
+      requestedTotalPayment < existingPaid) {
+      throw new Error('Invoice total cannot be less than payments already received');
+    }
+    const paid = requestedTotalPayment;
 
     const restoreStock = db.prepare(`UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`);
     const stockLog = db.prepare(`
@@ -397,6 +409,15 @@ function updateInvoice(invoiceId, invoiceData) {
       }
     }
 
+    db.prepare(`DELETE FROM payments WHERE invoice_id = ?`).run(invoiceId);
+    const addPayment = db.prepare(`
+      INSERT INTO payments (invoice_id, amount, method)
+      VALUES (?, ?, ?)
+    `);
+    if (requestedCashAmount > 0) addPayment.run(invoiceId, requestedCashAmount, 'cash');
+    if (requestedOnlineAmount > 0) addPayment.run(invoiceId, requestedOnlineAmount, 'online');
+    const updatedPaid = paid;
+
     db.prepare(`
       UPDATE invoices
       SET customer_id = ?, customer_name = ?, customer_address = ?,
@@ -412,7 +433,7 @@ function updateInvoice(invoiceId, invoiceData) {
       discount,
       grandTotal,
       paymentMethod,
-      Number(paid) >= grandTotal ? 'paid' : Number(paid) > 0 ? 'partial' : 'unpaid',
+      updatedPaid >= grandTotal ? 'paid' : updatedPaid > 0 ? 'partial' : 'unpaid',
       invoiceId
     );
 

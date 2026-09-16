@@ -35,6 +35,7 @@ const menuItems = [
 function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
+  const [invoiceViewOnly, setInvoiceViewOnly] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const activeItem = menuItems.find((item) => item.id === activeSection);
   const [viewingCustomerId, setViewingCustomerId] = useState(null);
@@ -44,6 +45,7 @@ function App() {
 
   const openInvoiceEditor = (invoiceId) => {
     setViewingInvoiceId(null);
+    setInvoiceViewOnly(false);
     setEditingInvoiceId(invoiceId);
     setActiveSection('billing');
   };
@@ -200,7 +202,11 @@ function App() {
          {viewingInvoiceId ? (
   <Invoice
     invoiceId={viewingInvoiceId}
-    onBack={() => setViewingInvoiceId(null)}
+    readOnly={invoiceViewOnly}
+    onBack={() => {
+      setViewingInvoiceId(null);
+      setInvoiceViewOnly(false);
+    }}
     onEdit={() => openInvoiceEditor(viewingInvoiceId)}
   />
 ) : viewingCustomerId ? (
@@ -219,8 +225,14 @@ function App() {
   />
 ) : activeSection === 'billing' ? (
   <Billing
-    onInvoiceCreated={(id) => setViewingInvoiceId(id)}
-    onViewInvoice={(id) => setViewingInvoiceId(id)}
+    onInvoiceCreated={(id) => {
+      setInvoiceViewOnly(false);
+      setViewingInvoiceId(id);
+    }}
+    onViewInvoice={(id) => {
+      setInvoiceViewOnly(true);
+      setViewingInvoiceId(id);
+    }}
     editInvoiceId={editingInvoiceId}
     onEditComplete={() => setEditingInvoiceId(null)}
     onEditInvoice={openInvoiceEditor}

@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Pencil, Eye } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+
+const getUnitQuantity = (unit) => {
+  const standardQuantities = {
+    pcs: 1,
+    dozen: 12,
+    half_dozen: 6,
+    box: 10,
+  };
+  if (standardQuantities[unit]) return standardQuantities[unit];
+  const numericUnit = String(unit || '').match(/\d+/);
+  return numericUnit ? Number(numericUnit[0]) : 1;
+};
 
 function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplete, onEditInvoice }) {
   const draftKey = 'tradeflow_billing_draft';
@@ -22,7 +34,6 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [paymentErrorMsg, setPaymentErrorMsg] = useState('');
-  const [deleteInvoiceId, setDeleteInvoiceId] = useState(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const itemsScrollRef = useRef(null);
   const [historySearch, setHistorySearch] = useState('');
@@ -66,8 +77,8 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
         setCustomerAddress(invoice.customer_address || '');
         setDiscount(invoice.discount || 0);
         setPaymentMethod(invoice.payment_method || 'cash');
-        setCashAmount('');
-        setOnlineAmount('');
+        setCashAmount(Number(invoice.cash_received || 0));
+        setOnlineAmount(Number(invoice.online_received || 0));
         setItems(invoice.items.map((item) => ({
           id: item.id,
           product_id: item.product_id,
@@ -185,19 +196,32 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
   );
 
   const matchedProduct = products.find(
-    (p) => p.name.toLowerCase() === productSearch.trim().toLowerCase()
+    (p) => p.name.trim().toLowerCase() === productSearch.trim().toLowerCase()
   );
 
   const handleProductSearchChange = (value) => {
     setProductSearch(value);
-    const nextMatch = products.find((p) => p.name.toLowerCase() === value.trim().toLowerCase());
+    const nextMatch = products.find(
+      (p) => p.name.trim().toLowerCase() === value.trim().toLowerCase()
+    );
     if (nextMatch) {
       setRate(nextMatch.selling_price);
+      setQuantity(getUnitQuantity(nextMatch.unit));
     }
   };
 
+  useEffect(() => {
+    if (!matchedProduct) return;
+    setRate(matchedProduct.selling_price);
+    setQuantity(getUnitQuantity(matchedProduct.unit));
+  }, [matchedProduct]);
+
   const handlePaymentMethodChange = (method) => {
     setPaymentMethod(method);
+    if (method === 'credit') {
+      setCashAmount('');
+      setOnlineAmount('');
+    }
     setPaymentErrorMsg('');
   };
 
@@ -234,16 +258,6 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
   };
 
   const handleRemoveItem = (id) => setItems(items.filter((i) => i.id !== id));
-
-  const handleDeleteInvoice = async (invoiceId) => {
-    try {
-      await window.api.billing.deleteInvoice(invoiceId);
-      setDeleteInvoiceId(null);
-      await loadData();
-    } catch (error) {
-      setErrorMsg(error.message || 'Could not delete invoice.');
-    }
-  };
 
   const updateItem = (id, field, value) => {
     setItems(
@@ -511,7 +525,6 @@ const paginatedInvoices = filteredInvoices.slice(
             <th className="px-6 py-3 font-medium">Date</th>
             <th className="px-6 py-3 font-medium text-right">Amount</th>
             <th className="px-6 py-3 font-medium text-right">Payment</th>
-            <th className="px-6 py-3 font-medium text-right">Actions</th>
           </tr>
         </thead>
 
@@ -519,7 +532,7 @@ const paginatedInvoices = filteredInvoices.slice(
           {paginatedInvoices.length === 0 ? (
             <tr>
               <td
-                colSpan="6"
+                colSpan="5"
                 className="px-6 py-10 text-center text-gray-400"
               >
                 No invoices found
@@ -530,6 +543,7 @@ const paginatedInvoices = filteredInvoices.slice(
               <tr
                 key={inv.id}
                 className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                onClick={() => onViewInvoice?.(inv.id)}
               >
                 <td className="px-6 py-3 font-medium text-gray-800">
                   {inv.invoice_number}
@@ -557,43 +571,6 @@ const paginatedInvoices = filteredInvoices.slice(
                   >
                     {inv.payment_method === 'cash' ? 'Cash' : 'Credit'}
                   </span>
-                </td>
-                <td className="px-6 py-3 text-right whitespace-nowrap">
-                  <button
-                    type="button"
-                    title="Open invoice"
-                    onClick={() => onViewInvoice?.(inv.id)}
-                    className="inline-flex p-1.5 text-gray-500 hover:text-blue-600"
-                  >
-                    <Eye size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    title="Edit invoice"
-                    onClick={() => onEditInvoice?.(inv.id)}
-                    className="inline-flex p-1.5 text-gray-500 hover:text-blue-600"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  {deleteInvoiceId === inv.id ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-red-600">
-                      <span className="max-w-52 text-left">
-                        <span className="block font-semibold">Delete this invoice?</span>
-                        <span className="block text-[10px] leading-tight">
-                          Invoice and payments removed; sold stock restored.
-                        </span>
-                      </span>
-                      <button type="button" onClick={() => void handleDeleteInvoice(inv.id)} className="font-semibold hover:underline">Yes</button>
-                      <button type="button" onClick={() => setDeleteInvoiceId(null)} className="text-gray-500 hover:underline">No</button>
-                    </span>
-                  ) : <button
-                    type="button"
-                    title="Delete invoice"
-                    onClick={() => setDeleteInvoiceId(inv.id)}
-                    className="inline-flex p-1.5 text-gray-500 hover:text-red-600"
-                  >
-                    <Trash2 size={15} />
-                  </button>}
                 </td>
               </tr>
             ))
@@ -738,7 +715,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              <div className="w-20">
+              <div className="w-24">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Qty</label>
                 <input
                   type="number"
@@ -785,7 +762,7 @@ const paginatedInvoices = filteredInvoices.slice(
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-10 text-center text-gray-300">
+                    <td                     colSpan="5" className="px-6 py-10 text-center text-gray-300">
                       No items added yet
                     </td>
                   </tr>

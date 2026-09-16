@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Search } from 'lucide-react';
+import { Plus, Pencil, X, Search } from 'lucide-react';
 
 const emptyForm = { name: '', unit: 'pcs', selling_price: '', stock_quantity: '' };
 
@@ -130,20 +130,6 @@ function Products() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    try {
-      const result = await window.api.products.delete(id);
-      if (result?.success === false) {
-        setLoadError(result.message || 'Could not delete product.');
-        return;
-      }
-      await loadProducts();
-    } catch (error) {
-      console.error('Failed to delete product:', error);
-      setLoadError(error.message || 'Could not delete product. Please try again.');
-    }
-  };
   const filteredProducts = products.filter((product) => {
   const query = search.toLowerCase().trim();
 
@@ -245,12 +231,6 @@ const paginatedProducts = filteredProducts.slice(
                         className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md"
                       >
                         <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id, product.name)}
-                        className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md"
-                      >
-                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Pencil,
-  Trash2,
   Phone,
   X,
   Search,
@@ -163,21 +162,6 @@ function closeCustomerDetails() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    try {
-      const result = await window.api.customers.delete(id);
-      if (result?.success === false) {
-        setActionError(result.message || 'Could not delete customer.');
-        return;
-      }
-      await loadCustomers();
-      await loadCreditCustomers();
-    } catch (error) {
-      console.error('Failed to delete customer:', error);
-      setActionError(error.message || 'Could not delete customer. Please try again.');
-    }
-  };
 
 const filteredCustomers = (
   customerFilter === 'credit' ? creditCustomers : customers
@@ -357,12 +341,6 @@ const filteredCustomers = (
                         className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md"
                       >
                         <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(customer.id, customer.name)}
-                        className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md"
-                      >
-                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

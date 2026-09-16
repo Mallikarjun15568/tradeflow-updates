@@ -1,5 +1,5 @@
   import { Fragment, useState, useEffect, useRef } from 'react';
-  import { ArrowLeft, Printer, Zap, Pencil, Trash2, Save, X } from 'lucide-react';
+  import { ArrowLeft, Printer, Zap, Pencil } from 'lucide-react';
 
   const ITEMS_PER_PAGE = 29;
   const LAST_PAGE_ITEM_LIMIT = 24;
@@ -20,18 +20,14 @@
   });
 }
 
-  function Invoice({ invoiceId, onBack, onEdit }) {
+  function Invoice({ invoiceId, onBack, onEdit, readOnly = false }) {
     const [invoice, setInvoice] = useState(null);
     const [customer, setCustomer] = useState(null);
     const [shopSettings, setShopSettings] = useState({});
     const [loading, setLoading] = useState(true);
     const [printing, setPrinting] = useState(false);
     const [printError, setPrintError] = useState('');
-    const [editing, setEditing] = useState(false);
-    const [saving, setSaving] = useState(false);
     const [actionError, setActionError] = useState('');
-    const [deletePending, setDeletePending] = useState(false);
-    const [editForm, setEditForm] = useState(null);
     const printInProgressRef = useRef(false);
     const invoiceRequestRef = useRef(0);
 
@@ -54,18 +50,6 @@
         if (requestId !== invoiceRequestRef.current) return;
         setInvoice(data);
         setShopSettings(settings);
-        setEditForm({
-          customerName: data.customer_name || '',
-          customerPhone: data.customer_phone || '',
-          customerAddress: data.customer_address || '',
-          discount: data.discount || 0,
-          items: data.items.map((item) => ({
-            ...item,
-            rate: item.price,
-            name: item.custom_name,
-            quantity: item.quantity,
-          })),
-        });
       } catch (error) {
         console.error('Failed to load invoice:', error);
         if (requestId === invoiceRequestRef.current) {
@@ -78,44 +62,6 @@
       }
     };
 
-    const handleDelete = async () => {
-      setActionError('');
-      try {
-        await window.api.billing.deleteInvoice(invoiceId);
-        setDeletePending(false);
-        onBack();
-      } catch (error) {
-        setActionError(error.message || 'Could not delete invoice.');
-      }
-    };
-
-    const handleSaveEdit = async () => {
-      setSaving(true);
-      setActionError('');
-      try {
-        await window.api.billing.updateInvoice(invoiceId, {
-          customer_id: invoice.customer_id,
-          customer_name: editForm.customerName.trim(),
-          customer_phone: editForm.customerPhone.trim(),
-          customer_address: editForm.customerAddress.trim(),
-          discount: Number(editForm.discount || 0),
-          payment_method: invoice.payment_method,
-          items: editForm.items.map((item) => ({
-            product_id: item.product_id,
-            name: item.name,
-            quantity: Number(item.quantity),
-            rate: Number(item.rate),
-            size: item.size,
-          })),
-        });
-        setEditing(false);
-        await loadInvoice(invoiceRequestRef.current);
-      } catch (error) {
-        setActionError(error.message || 'Could not update invoice.');
-      } finally {
-        setSaving(false);
-      }
-    };
 
     const handlePrint = async () => {
       if (printInProgressRef.current) return;
@@ -225,57 +171,11 @@
             {actionError}
           </div>
         )}
-        <div className="flex justify-end gap-2 mb-4 print:hidden">
-          {editing ? (
-            <>
-              <button type="button" onClick={() => setEditing(false)} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg text-sm">
-                <X size={15} /> Cancel
-              </button>
-              <button type="button" onClick={() => void handleSaveEdit()} disabled={saving} className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm disabled:opacity-50">
-                <Save size={15} /> {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </>
-          ) : (
-            <>
+        {!readOnly && (
+          <div className="flex justify-end gap-2 mb-4 print:hidden">
               <button type="button" onClick={onEdit} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">
                 <Pencil size={15} /> Edit Invoice
               </button>
-              <button type="button" onClick={() => setDeletePending(true)} className="inline-flex items-center gap-2 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-sm hover:bg-red-50">
-                <Trash2 size={15} /> Delete Invoice
-              </button>
-            </>
-          )}
-        </div>
-        {deletePending && !editing && (
-          <div className="mb-4 flex items-center justify-end gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm print:hidden">
-            <div className="text-red-700">
-              <div className="font-semibold">Delete this invoice?</div>
-              <div className="text-xs mt-0.5">
-                This will remove the invoice and its payments and restore sold stock.
-              </div>
-            </div>
-            <button type="button" onClick={() => void handleDelete()} className="font-semibold text-red-700 hover:underline">Yes, delete</button>
-            <button type="button" onClick={() => setDeletePending(false)} className="text-gray-600 hover:underline">Cancel</button>
-          </div>
-        )}
-        {editing && editForm && (
-          <div className="mb-5 p-4 bg-white border border-gray-200 rounded-xl print:hidden">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              <input value={editForm.customerName} onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })} placeholder="Customer name" className="border rounded-lg px-3 py-2 text-sm" />
-              <input value={editForm.customerPhone} onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })} placeholder="Phone" className="border rounded-lg px-3 py-2 text-sm" />
-              <input value={editForm.customerAddress} onChange={(e) => setEditForm({ ...editForm, customerAddress: e.target.value })} placeholder="Address" className="border rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div className="space-y-2">
-              {editForm.items.map((item, index) => (
-                <div key={item.id || index} className="grid grid-cols-[1fr_100px_100px_auto] gap-2">
-                  <input value={item.name} readOnly className="border rounded-lg px-3 py-2 text-sm bg-gray-50" />
-                  <input type="number" min="0" value={item.rate} onChange={(e) => setEditForm({ ...editForm, items: editForm.items.map((entry, i) => i === index ? { ...entry, rate: e.target.value } : entry) })} className="border rounded-lg px-3 py-2 text-sm" />
-                  <input type="number" min="1" value={item.quantity} onChange={(e) => setEditForm({ ...editForm, items: editForm.items.map((entry, i) => i === index ? { ...entry, quantity: e.target.value } : entry) })} className="border rounded-lg px-3 py-2 text-sm" />
-                  <button type="button" onClick={() => setEditForm({ ...editForm, items: editForm.items.filter((_, i) => i !== index) })} className="text-red-500 px-2"><Trash2 size={15} /></button>
-                </div>
-              ))}
-            </div>
-            <input type="number" min="0" value={editForm.discount} onChange={(e) => setEditForm({ ...editForm, discount: e.target.value })} placeholder="Discount" className="border rounded-lg px-3 py-2 text-sm mt-3" />
           </div>
         )}
 
