@@ -66,17 +66,22 @@ function getCreditCustomers() {
             c.address,
 
             COALESCE((
-                SELECT SUM(i.grand_total)
+                SELECT SUM(
+                    i.grand_total - COALESCE((
+                        SELECT SUM(p.amount)
+                        FROM payments p
+                        WHERE p.invoice_id = i.id
+                    ), 0)
+                )
                 FROM invoices i
                 WHERE i.customer_id = c.id
-            ), 0) AS total_credit,
-
+            ), 0) AS total_credit
+            ,
             COALESCE((
                 SELECT SUM(p.amount)
                 FROM payments p
-                INNER JOIN invoices i
-                    ON i.id = p.invoice_id
-                WHERE i.customer_id = c.id
+                INNER JOIN invoices pi ON pi.id = p.invoice_id
+                WHERE pi.customer_id = c.id
             ), 0) AS total_paid
 
         FROM customers c
@@ -85,14 +90,14 @@ function getCreditCustomers() {
 
     return customers
         .map((customer) => {
-            const totalCredit = Number(customer.total_credit || 0);
+            const totalCredit = Math.max(0, Number(customer.total_credit || 0));
             const totalPaid = Number(customer.total_paid || 0);
 
             return {
                 ...customer,
                 total_credit: totalCredit,
                 total_paid: totalPaid,
-                remaining: Math.max(0, totalCredit - totalPaid)
+                remaining: totalCredit
             };
         })
         .filter((customer) => customer.remaining > 0);
@@ -157,32 +162,30 @@ function getCustomerPaymentSummary(customerId) {
      * Credit invoices
      */
     const creditResult = db.prepare(`
-        SELECT
-            COALESCE(SUM(i.grand_total), 0) AS total_credit
+        SELECT COALESCE(SUM(
+            i.grand_total - COALESCE((
+                SELECT SUM(p.amount)
+                FROM payments p
+                WHERE p.invoice_id = i.id
+            ), 0)
+        ), 0) AS total_credit,
+        COALESCE((
+            SELECT SUM(p.amount)
+            FROM payments p
+            INNER JOIN invoices pi ON pi.id = p.invoice_id
+            WHERE pi.customer_id = ?
+        ), 0) AS total_paid
         FROM invoices i
         WHERE i.customer_id = ?
-    `).get(customerId);
+    `).get(customerId, customerId);
 
-    /*
-     * Payments received against credit invoices
-     */
-    const paidResult = db.prepare(`
-        SELECT
-            COALESCE(SUM(p.amount), 0) AS total_paid
-        FROM payments p
-        INNER JOIN invoices i
-            ON i.id = p.invoice_id
-        WHERE i.customer_id = ?
-    `).get(customerId);
-
-    const totalCredit = Number(creditResult.total_credit || 0);
-    const totalPaid = Number(paidResult.total_paid || 0);
+    const totalCredit = Math.max(0, Number(creditResult.total_credit || 0));
 
     return {
         customer_id: customerId,
         total_credit: totalCredit,
-        total_paid: totalPaid,
-        remaining: Math.max(0, totalCredit - totalPaid)
+        total_paid: Number(creditResult.total_paid || 0),
+        remaining: totalCredit
     };
 }
 

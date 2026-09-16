@@ -368,8 +368,12 @@ function updateInvoice(invoiceId, invoiceData) {
       throw new Error('Invoice total cannot be less than payments already received');
     }
 
-    const paymentMethod = invoiceData.payment_method || invoice.payment_method;
+    const requestedPaymentMethod = invoiceData.payment_method || invoice.payment_method;
     const customerId = invoiceData.customer_id ?? invoice.customer_id;
+    const paymentMethod = Number(paid) < grandTotal ? 'credit' : requestedPaymentMethod;
+    if (!['cash', 'credit'].includes(paymentMethod)) {
+      throw new Error('Invalid payment method');
+    }
     if (paymentMethod === 'credit' && !customerId) {
       throw new Error('Customer is required for a credit invoice');
     }
