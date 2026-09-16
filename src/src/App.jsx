@@ -35,11 +35,18 @@ const menuItems = [
 function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const activeItem = menuItems.find((item) => item.id === activeSection);
   const [viewingCustomerId, setViewingCustomerId] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [checkingLicense, setCheckingLicense] = useState(true);
   const [appVersion, setAppVersion] = useState(null);
+
+  const openInvoiceEditor = (invoiceId) => {
+    setViewingInvoiceId(null);
+    setEditingInvoiceId(invoiceId);
+    setActiveSection('billing');
+  };
 
   useEffect(() => {
     const isLicenseExpired = (license) => {
@@ -194,6 +201,7 @@ function App() {
   <Invoice
     invoiceId={viewingInvoiceId}
     onBack={() => setViewingInvoiceId(null)}
+    onEdit={() => openInvoiceEditor(viewingInvoiceId)}
   />
 ) : viewingCustomerId ? (
   <CustomerDetails
@@ -213,6 +221,9 @@ function App() {
   <Billing
     onInvoiceCreated={(id) => setViewingInvoiceId(id)}
     onViewInvoice={(id) => setViewingInvoiceId(id)}
+    editInvoiceId={editingInvoiceId}
+    onEditComplete={() => setEditingInvoiceId(null)}
+    onEditInvoice={openInvoiceEditor}
   />
 ) : activeSection === 'stock' ? (
   <Stock />

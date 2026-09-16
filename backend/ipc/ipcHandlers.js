@@ -94,6 +94,8 @@ function registerIpcHandlers() {
     // Billing
     ipcMain.handle('billing:createInvoice', (event, invoiceData) => billingService.createInvoice(invoiceData));
     ipcMain.handle('billing:getAllInvoices', () => billingService.getAllInvoices());
+    ipcMain.handle('billing:updateInvoice', (event, id, invoiceData) => billingService.updateInvoice(id, invoiceData));
+    ipcMain.handle('billing:deleteInvoice', (event, id) => billingService.deleteInvoice(id));
     ipcMain.handle('billing:getInvoiceWithItems', (event, id) => billingService.getInvoiceWithItems(id));
     ipcMain.handle('billing:addPayment', (event, invoiceId, amount, method) => billingService.addPayment(invoiceId, amount, method));
     ipcMain.handle('billing:getInvoicePayments',(event, invoiceId) => billingService.getInvoicePayments(invoiceId));

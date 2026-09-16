@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('api', {
   billing: {
     createInvoice: (invoiceData) => invoke('billing:createInvoice', invoiceData),
     getAllInvoices: () => invoke('billing:getAllInvoices'),
+    updateInvoice: (id, invoiceData) => invoke('billing:updateInvoice', id, invoiceData),
+    deleteInvoice: (id) => invoke('billing:deleteInvoice', id),
     getInvoiceWithItems: (id) => invoke('billing:getInvoiceWithItems', id),
     addPayment: (invoiceId, amount, method) => invoke('billing:addPayment', invoiceId, amount, method),
     getInvoicePayments: (invoiceId) => invoke('billing:getInvoicePayments', invoiceId),

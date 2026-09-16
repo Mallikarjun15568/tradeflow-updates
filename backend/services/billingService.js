@@ -321,6 +321,139 @@ function getAllInvoices() {
   `).all();
 }
 
+function updateInvoice(invoiceId, invoiceData) {
+  if (!invoiceData || !Array.isArray(invoiceData.items) || invoiceData.items.length === 0) {
+    throw new Error('Invoice must have at least one item');
+  }
+
+  const updateTransaction = db.transaction(() => {
+    const invoice = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(invoiceId);
+    if (!invoice) throw new Error(`Invoice ID ${invoiceId} not found`);
+
+    const existingItems = db.prepare(`
+      SELECT product_id, quantity FROM invoice_items WHERE invoice_id = ?
+    `).all(invoiceId);
+    let subtotal = 0;
+    const items = invoiceData.items.map((item) => {
+      const quantity = Number(item.quantity);
+      const price = Number(item.rate ?? item.price);
+      if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price < 0) {
+        throw new Error('Invalid invoice item');
+      }
+      const name = String(item.name ?? item.custom_name ?? '').trim();
+      if (!item.product_id && !name) throw new Error('Manual item name is required');
+      const product = item.product_id ? getProductById(item.product_id) : null;
+      if (item.product_id && !product) throw new Error(`Product ID ${item.product_id} not found`);
+      const itemSubtotal = quantity * price;
+      subtotal += itemSubtotal;
+      return {
+        product_id: product ? product.id : null,
+        custom_name: name || (product ? product.name : ''),
+        size: product ? product.size || null : item.size || null,
+        quantity,
+        price,
+        subtotal: itemSubtotal,
+      };
+    });
+
+    const discount = Number(invoiceData.discount || 0);
+    if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
+      throw new Error('Invalid discount');
+    }
+    const grandTotal = subtotal - discount;
+    const paid = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE invoice_id = ?
+    `).get(invoiceId).total;
+    if (Number(paid) > grandTotal) {
+      throw new Error('Invoice total cannot be less than payments already received');
+    }
+
+    const paymentMethod = invoiceData.payment_method || invoice.payment_method;
+    const customerId = invoiceData.customer_id ?? invoice.customer_id;
+    if (paymentMethod === 'credit' && !customerId) {
+      throw new Error('Customer is required for a credit invoice');
+    }
+
+    const restoreStock = db.prepare(`UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`);
+    const stockLog = db.prepare(`
+      INSERT INTO stock_transactions (product_id, change_quantity, reason)
+      VALUES (?, ?, ?)
+    `);
+    for (const item of existingItems) {
+      if (item.product_id) {
+        restoreStock.run(item.quantity, item.product_id);
+        stockLog.run(item.product_id, item.quantity, 'invoice edit restore');
+      }
+    }
+    const reduceStock = db.prepare(`UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?`);
+    for (const item of items) {
+      if (item.product_id) {
+        reduceStock.run(item.quantity, item.product_id);
+        stockLog.run(item.product_id, -item.quantity, 'invoice edit sale');
+      }
+    }
+
+    db.prepare(`
+      UPDATE invoices
+      SET customer_id = ?, customer_name = ?, customer_address = ?,
+          customer_phone = ?, subtotal = ?, discount = ?, grand_total = ?,
+          payment_method = ?, payment_status = ?
+      WHERE id = ?
+    `).run(
+      customerId || null,
+      invoiceData.customer_name || null,
+      invoiceData.customer_address || null,
+      invoiceData.customer_phone || null,
+      subtotal,
+      discount,
+      grandTotal,
+      paymentMethod,
+      Number(paid) >= grandTotal ? 'paid' : Number(paid) > 0 ? 'partial' : 'unpaid',
+      invoiceId
+    );
+
+    db.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(invoiceId);
+    const insertItem = db.prepare(`
+      INSERT INTO invoice_items
+        (invoice_id, product_id, custom_name, size, quantity, price, subtotal)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const item of items) {
+      insertItem.run(invoiceId, item.product_id, item.custom_name, item.size,
+        item.quantity, item.price, item.subtotal);
+    }
+    return { invoiceId, grand_total: grandTotal };
+  });
+
+  return updateTransaction();
+}
+
+function deleteInvoice(invoiceId) {
+  const deleteTransaction = db.transaction(() => {
+    const invoice = db.prepare(`SELECT id FROM invoices WHERE id = ?`).get(invoiceId);
+    if (!invoice) throw new Error(`Invoice ID ${invoiceId} not found`);
+    const items = db.prepare(`
+      SELECT product_id, quantity FROM invoice_items WHERE invoice_id = ?
+    `).all(invoiceId);
+    const restoreStock = db.prepare(`UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`);
+    const stockLog = db.prepare(`
+      INSERT INTO stock_transactions (product_id, change_quantity, reason)
+      VALUES (?, ?, ?)
+    `);
+    for (const item of items) {
+      if (item.product_id) {
+        restoreStock.run(item.quantity, item.product_id);
+        stockLog.run(item.product_id, item.quantity, 'invoice deleted');
+      }
+    }
+    db.prepare(`DELETE FROM payments WHERE invoice_id = ?`).run(invoiceId);
+    db.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(invoiceId);
+    db.prepare(`DELETE FROM invoices WHERE id = ?`).run(invoiceId);
+    return { success: true };
+  });
+  return deleteTransaction();
+}
+
 function getInvoicePayments(invoiceId) {
   return db.prepare(`
     SELECT
@@ -363,6 +496,8 @@ function getInvoiceWithItems(invoiceId) {
 module.exports = {
   createInvoice,
   getAllInvoices,
+  updateInvoice,
+  deleteInvoice,
   getInvoiceWithItems,
   addPayment,
   getInvoicePayments

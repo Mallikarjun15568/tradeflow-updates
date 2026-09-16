@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye } from 'lucide-react';
 
-function Billing({ onInvoiceCreated, onViewInvoice }) {
+function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplete, onEditInvoice }) {
   const draftKey = 'tradeflow_billing_draft';
   const [activeTab, setActiveTab] = useState('new');
   const [customers, setCustomers] = useState([]);
@@ -22,6 +22,9 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [paymentErrorMsg, setPaymentErrorMsg] = useState('');
+  const [deleteInvoiceId, setDeleteInvoiceId] = useState(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const itemsScrollRef = useRef(null);
   const [historySearch, setHistorySearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -48,6 +51,45 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    if (!editInvoiceId) return;
+    let cancelled = false;
+    const loadInvoiceForEdit = async () => {
+      try {
+        const invoice = await window.api.billing.getInvoiceWithItems(editInvoiceId);
+        if (cancelled) return;
+        setActiveTab('new');
+        setEditingInvoiceId(invoice.id);
+        setCustomerName(invoice.customer_name || '');
+        setCustomerPhone(invoice.customer_phone || '');
+        setCustomerAddress(invoice.customer_address || '');
+        setDiscount(invoice.discount || 0);
+        setPaymentMethod(invoice.payment_method || 'cash');
+        setCashAmount('');
+        setOnlineAmount('');
+        setItems(invoice.items.map((item) => ({
+          id: item.id,
+          product_id: item.product_id,
+          name: item.custom_name || item.item_name || '',
+          qty: item.quantity,
+          rate: item.price,
+          availableStock: null,
+        })));
+        setErrorMsg('');
+      } catch (error) {
+        setErrorMsg(error.message || 'Could not load invoice for editing.');
+      }
+    };
+    void loadInvoiceForEdit();
+    return () => { cancelled = true; };
+  }, [editInvoiceId]);
+
+  useEffect(() => {
+    if (items.length > 0 && itemsScrollRef.current) {
+      itemsScrollRef.current.scrollTop = itemsScrollRef.current.scrollHeight;
+    }
+  }, [items.length]);
 
   useEffect(() => {
     try {
@@ -193,11 +235,21 @@ function Billing({ onInvoiceCreated, onViewInvoice }) {
 
   const handleRemoveItem = (id) => setItems(items.filter((i) => i.id !== id));
 
+  const handleDeleteInvoice = async (invoiceId) => {
+    try {
+      await window.api.billing.deleteInvoice(invoiceId);
+      setDeleteInvoiceId(null);
+      await loadData();
+    } catch (error) {
+      setErrorMsg(error.message || 'Could not delete invoice.');
+    }
+  };
+
   const updateItem = (id, field, value) => {
     setItems(
       items.map((i) => {
         if (i.id !== id) return i;
-        const nextValue = value === '' ? '' : Number(value);
+        const nextValue = field === 'name' || value === '' ? value : Number(value);
         return { ...i, [field]: nextValue };
       })
     );
@@ -316,11 +368,11 @@ const paginatedInvoices = filteredInvoices.slice(
         }
       }
 
-      const result = await window.api.billing.createInvoice({
+      const invoicePayload = {
         customer_id: customerId,
         items: items.map((i) => ({
           product_id: i.product_id,
-          name: i.product_id ? undefined : i.name,
+          name: i.name,
           quantity: i.qty,
           rate: i.rate,
         })),
@@ -328,12 +380,24 @@ const paginatedInvoices = filteredInvoices.slice(
         payment_method: paymentMethod,
         initial_cash_amount: defaultCashAmount,
         initial_online_amount: normalizedOnlineAmount,
-      });
+      };
+      const result = editingInvoiceId
+        ? await window.api.billing.updateInvoice(editingInvoiceId, {
+          ...invoicePayload,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone.trim(),
+          customer_address: customerAddress.trim(),
+          items: invoicePayload.items,
+        })
+        : await window.api.billing.createInvoice(invoicePayload);
 
       setItems([]);
       clearDraft();
       await loadData();
-      onInvoiceCreated?.(result.invoiceId);
+      const savedInvoiceId = result.invoiceId || editingInvoiceId;
+      setEditingInvoiceId(null);
+      onEditComplete?.();
+      onInvoiceCreated?.(savedInvoiceId);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to create invoice');
     } finally {
@@ -377,6 +441,11 @@ const paginatedInvoices = filteredInvoices.slice(
   <div>
 
     {/* Search + Filters */}
+    {errorMsg && (
+      <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">
+        {errorMsg}
+      </div>
+    )}
     <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
       <div className="flex flex-wrap items-center gap-3">
 
@@ -442,6 +511,7 @@ const paginatedInvoices = filteredInvoices.slice(
             <th className="px-6 py-3 font-medium">Date</th>
             <th className="px-6 py-3 font-medium text-right">Amount</th>
             <th className="px-6 py-3 font-medium text-right">Payment</th>
+            <th className="px-6 py-3 font-medium text-right">Actions</th>
           </tr>
         </thead>
 
@@ -449,7 +519,7 @@ const paginatedInvoices = filteredInvoices.slice(
           {paginatedInvoices.length === 0 ? (
             <tr>
               <td
-                colSpan="5"
+                colSpan="6"
                 className="px-6 py-10 text-center text-gray-400"
               >
                 No invoices found
@@ -459,7 +529,6 @@ const paginatedInvoices = filteredInvoices.slice(
             paginatedInvoices.map((inv) => (
               <tr
                 key={inv.id}
-                onClick={() => onViewInvoice?.(inv.id)}
                 className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
               >
                 <td className="px-6 py-3 font-medium text-gray-800">
@@ -488,6 +557,43 @@ const paginatedInvoices = filteredInvoices.slice(
                   >
                     {inv.payment_method === 'cash' ? 'Cash' : 'Credit'}
                   </span>
+                </td>
+                <td className="px-6 py-3 text-right whitespace-nowrap">
+                  <button
+                    type="button"
+                    title="Open invoice"
+                    onClick={() => onViewInvoice?.(inv.id)}
+                    className="inline-flex p-1.5 text-gray-500 hover:text-blue-600"
+                  >
+                    <Eye size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Edit invoice"
+                    onClick={() => onEditInvoice?.(inv.id)}
+                    className="inline-flex p-1.5 text-gray-500 hover:text-blue-600"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  {deleteInvoiceId === inv.id ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                      <span className="max-w-52 text-left">
+                        <span className="block font-semibold">Delete this invoice?</span>
+                        <span className="block text-[10px] leading-tight">
+                          Invoice and payments removed; sold stock restored.
+                        </span>
+                      </span>
+                      <button type="button" onClick={() => void handleDeleteInvoice(inv.id)} className="font-semibold hover:underline">Yes</button>
+                      <button type="button" onClick={() => setDeleteInvoiceId(null)} className="text-gray-500 hover:underline">No</button>
+                    </span>
+                  ) : <button
+                    type="button"
+                    title="Delete invoice"
+                    onClick={() => setDeleteInvoiceId(inv.id)}
+                    className="inline-flex p-1.5 text-gray-500 hover:text-red-600"
+                  >
+                    <Trash2 size={15} />
+                  </button>}
                 </td>
               </tr>
             ))
@@ -657,7 +763,14 @@ const paginatedInvoices = filteredInvoices.slice(
             )}
           </div>
 
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">
+              Items <span className="text-gray-400 font-normal">({items.length})</span>
+            </h3>
+            <span className="text-xs text-gray-400">Scroll to view all items</span>
+          </div>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+            <div ref={itemsScrollRef} className="max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
@@ -680,7 +793,14 @@ const paginatedInvoices = filteredInvoices.slice(
                   items.map((item, index) => (
                     <tr key={item.id} className="border-b border-gray-100 last:border-0">
                       <td className="px-6 py-2 text-gray-400">{index + 1}</td>
-                      <td className="px-2 py-2 text-gray-800 font-medium">{item.name}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                          className="w-full min-w-40 border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        />
+                      </td>
                       <td className="px-2 py-2">
                         <input
                           type="number"
@@ -715,6 +835,7 @@ const paginatedInvoices = filteredInvoices.slice(
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -819,7 +940,7 @@ const paginatedInvoices = filteredInvoices.slice(
                 disabled={items.length === 0 || creating}
                 className="bg-blue-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
-                {creating ? 'Creating Invoice...' : 'Create Invoice'}
+                {creating ? 'Saving Invoice...' : editingInvoiceId ? 'Save Invoice Changes' : 'Create Invoice'}
               </button>
             </div>
           </div>
