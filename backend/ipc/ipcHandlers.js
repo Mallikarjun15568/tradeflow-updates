@@ -53,6 +53,15 @@ function registerIpcHandlers() {
             });
         }
     );
+    ipcMain.handle('license:verify', async (event, licenseKey, deviceId, appVersion) =>
+        licenseService.verifyLicense({ licenseKey, deviceId, appVersion })
+    );
+    ipcMain.handle('security:getPinState', () => settingsService.getSecurityPinState());
+    ipcMain.handle('security:verifyPin', (event, pin) => settingsService.verifySecurityPin(pin));
+    ipcMain.handle('security:setPin', (event, pin) => {
+        settingsService.setSecurityPin(pin);
+        return { success: true };
+    });
 
     // Products
     ipcMain.handle('products:getAll', () => productService.getAllProducts());

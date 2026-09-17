@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, DatabaseBackup } from 'lucide-react';
+import { Save, DatabaseBackup, ChevronDown, ChevronUp } from 'lucide-react';
 
 
 function Settings() {
@@ -15,6 +15,27 @@ function Settings() {
   const [backups, setBackups] = useState([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinMsg, setPinMsg] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [security, setSecurity] = useState({
+    page_lock_enabled: 'on',
+    lock_dashboard: 'on',
+    lock_reports: 'on',
+    lock_customers: 'off',
+    lock_stock: 'off',
+    lock_settings: 'off',
+  });
+  const [securityPin, setSecurityPin] = useState('');
+  const [securityMsg, setSecurityMsg] = useState('');
+  const [securityError, setSecurityError] = useState('');
+  const [securityExpanded, setSecurityExpanded] = useState(false);
+  const [pinExpanded, setPinExpanded] = useState(false);
+  const [shopExpanded, setShopExpanded] = useState(false);
+  const [invoiceExpanded, setInvoiceExpanded] = useState(false);
+  const [backupExpanded, setBackupExpanded] = useState(false);
   const messageTimersRef = useRef([]);
 
   useEffect(() => () => {
@@ -38,6 +59,15 @@ const loadSettings = async () => {
     const data = await window.api.settings.getAll();
 
     setSettings(data);
+    setSecurity((current) => ({
+      ...current,
+      page_lock_enabled: data.page_lock_enabled || 'on',
+      lock_dashboard: data.lock_dashboard || 'on',
+      lock_reports: data.lock_reports || 'on',
+      lock_customers: data.lock_customers || 'off',
+      lock_stock: data.lock_stock || 'off',
+      lock_settings: data.lock_settings || 'off',
+    }));
 
     if (data.last_backup) {
       setLastBackup(
@@ -83,6 +113,48 @@ const loadSettings = async () => {
     }
   };
 
+  const handlePinChange = async (event) => {
+    event.preventDefault();
+    setPinMsg('');
+    setPinError('');
+    if (!/^\d{4,6}$/.test(newPin) || newPin !== confirmPin) {
+      setPinError('New PIN must be 4 to 6 matching digits.');
+      return;
+    }
+    try {
+      if (!(await window.api.security.verifyPin(currentPin))) {
+        setPinError('Current PIN is incorrect.');
+        return;
+      }
+      await window.api.security.setPin(newPin);
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      setPinMsg('Security PIN changed successfully.');
+    } catch (error) {
+      setPinError(error.message || 'Could not change security PIN.');
+    }
+  };
+
+  const saveSecurity = async (event) => {
+    event.preventDefault();
+    setSecurityMsg('');
+    setSecurityError('');
+    try {
+      if (!(await window.api.security.verifyPin(securityPin))) {
+        setSecurityError('Current PIN is incorrect.');
+        return;
+      }
+      for (const [key, value] of Object.entries(security)) {
+        await window.api.settings.update(key, value);
+      }
+      setSecurityPin('');
+      setSecurityMsg('Page security settings saved.');
+    } catch (error) {
+      setSecurityError(error.message || 'Could not save page security settings.');
+    }
+  };
+
   if (loading) {
     return <div className="text-center text-gray-400 py-10">Loading...</div>;
   }
@@ -102,10 +174,112 @@ const loadSettings = async () => {
 
       {/* Shop Info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 mb-1">Shop Information</h3>
-        <p className="text-xs text-gray-500 mb-4">This appears on your printed invoices</p>
+        <button
+          type="button"
+          onClick={() => setSecurityExpanded((expanded) => !expanded)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Page Security</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              {security.page_lock_enabled === 'on' ? 'PIN protection is enabled' : 'PIN protection is disabled'}
+            </p>
+          </div>
+          {securityExpanded ? (
+            <ChevronUp size={18} className="text-gray-400" />
+          ) : (
+            <ChevronDown size={18} className="text-gray-400" />
+          )}
+        </button>
+        {securityExpanded && (
+          <form onSubmit={saveSecurity} className="space-y-3 mt-5 pt-5 border-t border-gray-100">
+          {[
+            ['page_lock_enabled', 'Page Lock Security'],
+            ['lock_dashboard', 'Dashboard'],
+            ['lock_reports', 'Reports'],
+            ['lock_customers', 'Customers'],
+            ['lock_stock', 'Stock'],
+            ['lock_settings', 'Settings'],
+          ].map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between text-sm text-gray-700">
+              <span>{label}</span>
+              <input type="checkbox" checked={security[key] === 'on'}
+                onChange={(e) => setSecurity({ ...security, [key]: e.target.checked ? 'on' : 'off' })}
+                className="h-4 w-4 accent-blue-600" />
+            </label>
+          ))}
+          <div className="pt-3 border-t border-gray-100">
+            <label className="text-xs font-medium text-gray-600 mb-1 block">
+              Authorize security changes
+            </label>
+            <p className="text-xs text-gray-400 mb-2">
+              Enter your current Security PIN to save these settings.
+            </p>
+            <input type="password" inputMode="numeric" maxLength={6} value={securityPin}
+            onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, ''))}
+            placeholder="Current Security PIN"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          {securityError && <div className="text-sm text-red-600">{securityError}</div>}
+          {securityMsg && <div className="text-sm text-green-700">{securityMsg}</div>}
+          <button type="submit" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm">
+            Save Page Security
+          </button>
+          </form>
+        )}
+      </div>
 
-        <div className="space-y-3">
+      {/* Shop Info */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <button
+          type="button"
+          onClick={() => setPinExpanded((expanded) => !expanded)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Change Security PIN</h3>
+            <p className="text-xs text-gray-500 mt-1">Update the PIN used to unlock protected pages.</p>
+          </div>
+          {pinExpanded ? (
+            <ChevronUp size={18} className="text-gray-400" />
+          ) : (
+            <ChevronDown size={18} className="text-gray-400" />
+          )}
+        </button>
+        {pinExpanded && (
+        <form onSubmit={handlePinChange} className="space-y-3 mt-5 pt-5 border-t border-gray-100">
+          <input type="password" inputMode="numeric" maxLength={6} value={currentPin}
+            onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
+            placeholder="Current PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input type="password" inputMode="numeric" maxLength={6} value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="New PIN (4-6 digits)" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            <input type="password" inputMode="numeric" maxLength={6} value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="Confirm new PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          {pinError && <div className="text-sm text-red-600">{pinError}</div>}
+          {pinMsg && <div className="text-sm text-green-700">{pinMsg}</div>}
+          <button type="submit" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm">
+            Change Security PIN
+          </button>
+        </form>
+        )}
+      </div>
+
+      {/* Shop Info */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <button type="button" onClick={() => setShopExpanded((expanded) => !expanded)}
+          className="w-full flex items-center justify-between text-left">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Shop Information</h3>
+            <p className="text-xs text-gray-500 mt-1">This appears on your printed invoices</p>
+          </div>
+          {shopExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+        </button>
+
+        {shopExpanded && (<div className="space-y-3 mt-5 pt-5 border-t border-gray-100">
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Shop Name</label>
             <input
@@ -133,15 +307,21 @@ const loadSettings = async () => {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             />
           </div>
-        </div>
+        </div>)}
       </div>
 
       {/* Invoice Settings */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 mb-1">Invoice Settings</h3>
-        <p className="text-xs text-gray-500 mb-4">Controls how invoice numbers are generated</p>
+        <button type="button" onClick={() => setInvoiceExpanded((expanded) => !expanded)}
+          className="w-full flex items-center justify-between text-left">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Invoice Settings</h3>
+            <p className="text-xs text-gray-500 mt-1">Controls how invoice numbers are generated</p>
+          </div>
+          {invoiceExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+        </button>
 
-        <div>
+        {invoiceExpanded && (<div className="mt-5 pt-5 border-t border-gray-100">
           <label className="text-xs font-medium text-gray-500 mb-1 block">
             Invoice Number Prefix
           </label>
@@ -154,12 +334,13 @@ const loadSettings = async () => {
           <p className="text-xs text-gray-400 mt-1">
             e.g. "INV-" makes invoices like INV-0000000001
           </p>
-        </div>
+        </div>)}
       </div>
 
 {/* Backup Settings */}
 <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-  <div className="flex items-start justify-between gap-4">
+  <button type="button" onClick={() => setBackupExpanded((expanded) => !expanded)}
+    className="w-full flex items-start justify-between gap-4 text-left">
     <div>
       <h3 className="text-sm font-semibold text-gray-800 mb-1">
         Backup
@@ -170,9 +351,13 @@ const loadSettings = async () => {
       </p>
     </div>
 
-    <DatabaseBackup size={20} className="text-gray-400" />
-  </div>
+    <div className="flex items-center gap-3">
+      <DatabaseBackup size={20} className="text-gray-400" />
+      {backupExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+    </div>
+  </button>
 
+  <div className="mt-5 pt-5 border-t border-gray-100" style={{ display: backupExpanded ? 'block' : 'none' }}>
   {/* Automatic Backup */}
   <div className="mt-5 flex items-center justify-between">
     <div>
@@ -363,6 +548,7 @@ const loadSettings = async () => {
     )}
   </div>
 )}
+    </div>
   </div>
 </div>
 

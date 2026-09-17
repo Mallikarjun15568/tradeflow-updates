@@ -21,6 +21,116 @@ import Reports from './Reports';
 import Activation from './Activation';
 import About from './About';
 
+function SecurityGate({ pageLabel, onSuccess, onCancel }) {
+  const [pin, setPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [licenseKey, setLicenseKey] = useState('');
+  const [configured, setConfigured] = useState(null);
+  const [resetMode, setResetMode] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    window.api.security.getPinState()
+      .then((state) => setConfigured(state.configured))
+      .catch((err) => setError(err.message || 'Could not load security settings.'));
+  }, []);
+
+  if (configured === null) {
+    return (
+      <div className="fixed inset-0 z-50 bg-gray-900/40 flex items-center justify-center">
+        <div className="bg-white rounded-xl px-6 py-5 text-sm text-gray-600">Loading security settings...</div>
+      </div>
+    );
+  }
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      if (!configured || resetMode) {
+        if (resetMode) {
+          const deviceId = await window.api.license.getDeviceId();
+          const appVersion = await window.api.license.getAppVersion();
+          await window.api.license.verify(licenseKey.trim(), deviceId, appVersion);
+        }
+        if (!/^\d{4,6}$/.test(newPin) || newPin !== confirmPin) {
+          throw new Error('Enter matching 4 to 6 digit PINs.');
+        }
+        await window.api.security.setPin(newPin);
+        setConfigured(true);
+        onSuccess();
+        return;
+      }
+      if (!/^\d{4,6}$/.test(pin) || !(await window.api.security.verifyPin(pin))) {
+        throw new Error('Incorrect PIN.');
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Security verification failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-900/40 flex items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">
+          {!configured || resetMode
+            ? (resetMode ? 'Reset Security PIN' : 'Set Security PIN')
+            : `Unlock ${pageLabel}`}
+          </h2>
+          {configured && (
+            <button type="button" onClick={onCancel} aria-label="Close"
+              className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mt-1 mb-5">
+          Dashboard and Reports are protected.
+        </p>
+        {!configured || resetMode ? (
+          <>
+            {resetMode && (
+              <input type="text" value={licenseKey} onChange={(e) => setLicenseKey(e.target.value)}
+                placeholder="Activation key" className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
+            )}
+            <input type="password" inputMode="numeric" maxLength={6} value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="New PIN (4-6 digits)" className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
+            <input type="password" inputMode="numeric" maxLength={6} value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="Confirm PIN" className="w-full border rounded-lg px-3 py-2 text-sm" />
+          </>
+        ) : (
+          <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            placeholder="Enter PIN" className="w-full border rounded-lg px-3 py-2 text-sm" />
+        )}
+        {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
+        <button disabled={busy} className="w-full mt-5 bg-blue-600 text-white rounded-lg py-2 text-sm disabled:opacity-50">
+          {busy ? 'Please wait...' : resetMode ? 'Reset PIN' : configured ? 'Unlock' : 'Save PIN'}
+        </button>
+        {configured && !resetMode && (
+          <button type="button" onClick={() => { setResetMode(true); setError(''); }}
+            className="w-full mt-3 text-sm text-blue-600 hover:underline">
+            Forgot PIN?
+          </button>
+        )}
+        {configured && resetMode && (
+          <button type="button" onClick={() => { setResetMode(false); setError(''); }}
+            className="w-full mt-3 text-sm text-gray-500 hover:underline">
+            Cancel
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'products', label: 'Products', icon: Package },
@@ -33,7 +143,7 @@ const menuItems = [
 ];
 
 function App() {
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('billing');
   const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
   const [invoiceViewOnly, setInvoiceViewOnly] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
@@ -42,12 +152,29 @@ function App() {
   const [isActivated, setIsActivated] = useState(false);
   const [checkingLicense, setCheckingLicense] = useState(true);
   const [appVersion, setAppVersion] = useState(null);
+  const [securityTarget, setSecurityTarget] = useState(null);
+  const [securitySettings, setSecuritySettings] = useState({});
 
   const openInvoiceEditor = (invoiceId) => {
     setViewingInvoiceId(null);
     setInvoiceViewOnly(false);
     setEditingInvoiceId(invoiceId);
     setActiveSection('billing');
+  };
+
+  const openSection = (sectionId) => {
+    window.api.settings.getAll().then((settings) => {
+      setSecuritySettings(settings);
+      const securityEnabled = settings.page_lock_enabled !== 'off';
+      const defaultLocked = sectionId === 'dashboard' || sectionId === 'reports';
+      const pageLocked = settings[`lock_${sectionId}`] === 'on' ||
+        (settings[`lock_${sectionId}`] === undefined && defaultLocked);
+      if (securityEnabled && pageLocked) {
+        setSecurityTarget(sectionId);
+      } else {
+        setActiveSection(sectionId);
+      }
+    }).catch((error) => console.error('Could not load page security settings:', error));
   };
 
   useEffect(() => {
@@ -166,7 +293,7 @@ function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => openSection(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 focus:outline-none ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
@@ -198,6 +325,16 @@ function App() {
         </header>
 
         {/* Page content */}
+        {securityTarget && (
+          <SecurityGate
+            pageLabel={menuItems.find((item) => item.id === securityTarget)?.label || 'Page'}
+            onSuccess={() => {
+            setActiveSection(securityTarget);
+            setSecurityTarget(null);
+            }}
+            onCancel={() => setSecurityTarget(null)}
+          />
+        )}
 <main className="flex-1 overflow-y-auto p-8">
          {viewingInvoiceId ? (
   <Invoice

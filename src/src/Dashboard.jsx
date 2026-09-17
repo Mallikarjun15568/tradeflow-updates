@@ -19,12 +19,9 @@ function formatAmount(amount) {
 function formatDate(dateString) {
   if (!dateString) return '-';
 
-  const date = new Date(
-    dateString.replace(' ', 'T') + 'Z'
-  );
+  const date = new Date(dateString.replace(' ', 'T'));
 
   return date.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',

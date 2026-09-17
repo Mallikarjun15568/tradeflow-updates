@@ -203,6 +203,11 @@
                       {shopSettings.shop_name || 'WHOLESALE BILLING'}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Phone: {shopSettings.shop_phone}</div>
+                    {shopSettings.shop_address && (
+                      <div className="text-xs text-gray-500 max-w-[280px]">
+                        Address: {shopSettings.shop_address}
+                      </div>
+                    )}
                   </div>
                   <div className="text-lg font-bold text-gray-800 tracking-widest">
                     ESTIMATE{pages.length > 1 ? ` (Page ${pageIndex + 1}/${pages.length})` : ''}

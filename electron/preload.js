@@ -93,5 +93,12 @@ contextBridge.exposeInMainWorld('api', {
       deviceId,
       appVersion
     ),
+verify: (licenseKey, deviceId, appVersion) =>
+  invoke('license:verify', licenseKey, deviceId, appVersion),
+},
+security: {
+  getPinState: () => invoke('security:getPinState'),
+  verifyPin: (pin) => invoke('security:verifyPin', pin),
+  setPin: (pin) => invoke('security:setPin', pin),
 },
 });

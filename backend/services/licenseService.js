@@ -23,6 +23,22 @@ async function activateLicense({ licenseKey, deviceId, appVersion }) {
     return data;
 }
 
+async function verifyLicense({ licenseKey, deviceId, appVersion }) {
+    const response = await fetch(`${LICENSE_SERVER_URL}/api/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_id: deviceId,
+        app_version: appVersion,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'License verification failed.');
+    return data;
+}
+
 module.exports = {
     activateLicense,
+    verifyLicense,
 };
