@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   Info,
+  Eye,
 } from 'lucide-react';
 import Products from './Products';
 import Customers from './Customers';
@@ -30,6 +31,9 @@ function SecurityGate({ pageLabel, onSuccess, onCancel }) {
   const [resetMode, setResetMode] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPin, setShowPin] = useState(false);
+  const [showNewPin, setShowNewPin] = useState(false);
+  const [showConfirmPin, setShowConfirmPin] = useState(false);
 
   useEffect(() => {
     window.api.security.getPinState()
@@ -98,17 +102,38 @@ function SecurityGate({ pageLabel, onSuccess, onCancel }) {
               <input type="text" value={licenseKey} onChange={(e) => setLicenseKey(e.target.value)}
                 placeholder="Activation key" className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
             )}
-            <input type="password" inputMode="numeric" maxLength={6} value={newPin}
-              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="New PIN (4-6 digits)" className="w-full border rounded-lg px-3 py-2 text-sm mb-3" />
-            <input type="password" inputMode="numeric" maxLength={6} value={confirmPin}
-              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="Confirm PIN" className="w-full border rounded-lg px-3 py-2 text-sm" />
+            <div className="relative mb-3">
+              <input type={showNewPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="New PIN (4-6 digits)" className="w-full border rounded-lg px-3 py-2 pr-10 text-sm" />
+              <button type="button" onClick={() => setShowNewPin((visible) => !visible)}
+                aria-label={showNewPin ? 'Hide new PIN' : 'Show new PIN'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showNewPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+                <Eye size={16} />
+              </button>
+            </div>
+            <div className="relative">
+              <input type={showConfirmPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="Confirm PIN" className="w-full border rounded-lg px-3 py-2 pr-10 text-sm" />
+              <button type="button" onClick={() => setShowConfirmPin((visible) => !visible)}
+                aria-label={showConfirmPin ? 'Hide confirmation PIN' : 'Show confirmation PIN'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showConfirmPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+                <Eye size={16} />
+              </button>
+            </div>
           </>
         ) : (
-          <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            placeholder="Enter PIN" className="w-full border rounded-lg px-3 py-2 text-sm" />
+          <div className="relative">
+            <input autoFocus type={showPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="Enter PIN" className="w-full border rounded-lg px-3 py-2 pr-10 text-sm" />
+            <button type="button" onClick={() => setShowPin((visible) => !visible)}
+              aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+              <Eye size={16} />
+            </button>
+          </div>
         )}
         {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
         <button disabled={busy} className="w-full mt-5 bg-blue-600 text-white rounded-lg py-2 text-sm disabled:opacity-50">
@@ -268,25 +293,25 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
+    <div className="flex h-screen bg-slate-50 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="px-6 py-6 flex items-center gap-3 border-b border-gray-200">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-[2px_0_12px_rgba(15,23,42,0.03)]">
+        <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-blue-600/25">
                 T
           </div>
 
 <div>
-  <div className="text-gray-800 font-semibold leading-tight">
+  <div className="text-slate-800 font-semibold leading-tight tracking-tight">
     TradeFlow
   </div>
-  <div className="text-xs text-gray-400 leading-tight">
+  <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
     Business Management
   </div>
 </div>
         </div>
 
-        <nav className="flex-1 px-3 py-6 space-y-1">
+        <nav aria-label="Main navigation" className="flex-1 px-3 py-5 space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -294,10 +319,11 @@ function App() {
               <button
                 key={item.id}
                 onClick={() => openSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 focus:outline-none ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 focus:outline-none ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
                 <Icon size={18} strokeWidth={2} />
@@ -307,7 +333,7 @@ function App() {
           })}
         </nav>
 
-        <div className="px-6 py-4 border-t border-gray-200 text-xs text-gray-400">
+        <div className="px-5 py-4 border-t border-slate-100 text-[11px] text-slate-400">
           TradeFlow v{appVersion || '...'}
         </div>
       </aside>
@@ -315,10 +341,15 @@ function App() {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top header */}
-        <header className="h-12 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-base font-semibold text-gray-800">{activeItem.label}</h1>
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
+          <div>
+            <h1 className="text-base font-semibold text-slate-800 tracking-tight">{activeItem.label}</h1>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {activeSection === 'billing' ? 'Create and manage your invoices' : 'Manage your business securely'}
+            </p>
+          </div>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-sm">
+            <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 ring-4 ring-blue-50/60 flex items-center justify-center font-semibold text-sm">
               M
             </div>
           </div>
@@ -335,7 +366,7 @@ function App() {
             onCancel={() => setSecurityTarget(null)}
           />
         )}
-<main className="flex-1 overflow-y-auto p-8">
+<main className="flex-1 overflow-y-auto p-6 lg:p-8">
          {viewingInvoiceId ? (
   <Invoice
     invoiceId={viewingInvoiceId}

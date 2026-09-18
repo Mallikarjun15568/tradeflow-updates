@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PackagePlus, Pencil, X, Search } from 'lucide-react';
+import { PackagePlus, Pencil, X, Search, Loader2, PackageOpen, RefreshCw } from 'lucide-react';
 
 function Stock() {
   const [products, setProducts] = useState([]);
@@ -116,15 +116,26 @@ function Stock() {
   return (
     <div>
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+        <div className="ui-alert-error mb-4 px-4 py-3 text-sm">
           {error}
         </div>
       )}
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-800">
-          Stock Management
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold text-slate-800 tracking-tight">
+            Stock Management
+          </h2>
+          <button
+            type="button"
+            onClick={loadProducts}
+            disabled={loading}
+            className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
 
         <p className="text-sm text-gray-500">
           Update stock when new inventory arrives
@@ -142,11 +153,11 @@ function Stock() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="ui-card overflow-x-auto">
         <table className="w-full text-sm">
 
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+            <tr className="ui-table-head border-b border-slate-200 text-left">
 
               <th className="px-6 py-3 font-medium">
                 Product
@@ -175,7 +186,7 @@ function Stock() {
                   colSpan="4"
                   className="px-6 py-8 text-center text-gray-400"
                 >
-                  Loading...
+                  <span className="ui-loading"><Loader2 size={18} className="animate-spin text-blue-600" />Loading stock...</span>
                 </td>
               </tr>
             ) : products.length === 0 ? (
@@ -184,7 +195,7 @@ function Stock() {
                   colSpan="4"
                   className="px-6 py-8 text-center text-gray-400"
                 >
-                  No products found
+                  <span className="ui-empty"><PackageOpen size={28} className="text-slate-300" /><span className="ui-empty-title">No stock items found</span><span>Add products before adjusting stock.</span></span>
                 </td>
               </tr>
             ) : (

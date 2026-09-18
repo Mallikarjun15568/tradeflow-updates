@@ -1,6 +1,6 @@
 {
   "name": "wholesalebilling",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Wholesale Billing Electron app",
   "main": "electron/main.js",
   "scripts": {

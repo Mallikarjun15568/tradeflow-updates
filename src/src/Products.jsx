@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, X, Search } from 'lucide-react';
+import { Plus, Pencil, X, Search, Loader2, PackageOpen, RefreshCw } from 'lucide-react';
 
 const emptyForm = { name: '', unit: 'pcs', selling_price: '', stock_quantity: '' };
 
@@ -154,19 +154,28 @@ const paginatedProducts = filteredProducts.slice(
   return (
     <div>
       {loadError && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+        <div className="ui-alert-error mb-4 px-4 py-3 text-sm">
           {loadError}
         </div>
       )}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
   <div>
-    <h2 className="text-lg font-semibold text-gray-800">All Products</h2>
+    <h2 className="text-xl font-semibold text-slate-800 tracking-tight">Products</h2>
     <p className="text-sm text-gray-500">
       {filteredProducts.length} products in inventory
     </p>
   </div>
 
-  <div className="flex items-center gap-3">
+  <div className="flex flex-wrap items-center gap-3">
+    <button
+      type="button"
+      onClick={loadProducts}
+      disabled={loading}
+      className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+    >
+      <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+      {loading ? 'Refreshing...' : 'Refresh'}
+    </button>
     {/* Search */}
     <div className="relative">
       <Search
@@ -179,24 +188,24 @@ const paginatedProducts = filteredProducts.slice(
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search products..."
-        className="w-64 border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="w-full sm:w-64 border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
       />
     </div>
 
     {/* Add Product */}
     <button
       onClick={openAddModal}
-      className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+      className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-600/20"
     >
       <Plus size={16} />
       Add Product
     </button>
   </div>
 </div>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="ui-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+            <tr className="ui-table-head border-b border-slate-200 text-left">
               <th className="px-6 py-3 font-medium">Name</th>
               <th className="px-6 py-3 font-medium">Unit</th>
               <th className="px-6 py-3 font-medium">Price</th>
@@ -206,9 +215,9 @@ const paginatedProducts = filteredProducts.slice(
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-400">Loading...</td></tr>
+              <tr><td colSpan="5"><div className="ui-loading"><Loader2 size={18} className="animate-spin text-blue-600" />Loading products...</div></td></tr>
             ) : filteredProducts.length === 0 ? (
-              <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-400">No products found</td></tr>
+              <tr><td colSpan="5"><div className="ui-empty"><PackageOpen size={28} className="text-slate-300" /><span className="ui-empty-title">No products found</span><span>Add a product to start managing your inventory.</span></div></td></tr>
             ) : (
               paginatedProducts.map((product) => (
                 <tr key={product.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">

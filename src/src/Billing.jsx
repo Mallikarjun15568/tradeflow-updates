@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 
 const getUnitQuantity = (unit) => {
   const standardQuantities = {
@@ -32,6 +32,7 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
   const [cashAmount, setCashAmount] = useState('');
   const [onlineAmount, setOnlineAmount] = useState('');
   const [creating, setCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [paymentErrorMsg, setPaymentErrorMsg] = useState('');
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
@@ -56,6 +57,16 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
     } catch (error) {
       console.error('Failed to load billing data:', error);
       setErrorMsg(error.message || 'Could not load billing data.');
+    }
+  };
+
+  const refreshData = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -440,15 +451,26 @@ const paginatedInvoices = filteredInvoices.slice(
             History
           </button>
         </div>
-        {activeTab === 'new' && items.length > 0 && (
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={clearDraft}
-            className="text-sm text-red-600 hover:text-red-700"
+            onClick={refreshData}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            Discard Draft
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-        )}
+          {activeTab === 'new' && items.length > 0 && (
+            <button
+              type="button"
+              onClick={clearDraft}
+              className="text-sm text-red-600 hover:text-red-700"
+            >
+              Discard Draft
+            </button>
+          )}
+        </div>
       </div>
                    
 {activeTab === 'history' ? (
@@ -456,11 +478,11 @@ const paginatedInvoices = filteredInvoices.slice(
 
     {/* Search + Filters */}
     {errorMsg && (
-      <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">
+      <div className="ui-alert-error text-sm px-4 py-3 mb-4">
         {errorMsg}
       </div>
     )}
-    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+    <div className="ui-card p-4 mb-4">
       <div className="flex flex-wrap items-center gap-3">
 
         {/* Search */}
@@ -516,10 +538,10 @@ const paginatedInvoices = filteredInvoices.slice(
     </div>
 
     {/* Invoice History Table */}
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="ui-card overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+          <tr className="ui-table-head border-b border-slate-200 text-left">
             <th className="px-6 py-3 font-medium">Invoice No.</th>
             <th className="px-6 py-3 font-medium">Customer</th>
             <th className="px-6 py-3 font-medium">Date</th>
@@ -533,9 +555,12 @@ const paginatedInvoices = filteredInvoices.slice(
             <tr>
               <td
                 colSpan="5"
-                className="px-6 py-10 text-center text-gray-400"
+                className="px-6 py-10 text-center text-slate-500"
               >
-                No invoices found
+                <div className="ui-empty">
+                  <span className="ui-empty-title">No invoices found</span>
+                  <span>Create a new bill to see it here.</span>
+                </div>
               </td>
             </tr>
           ) : (
@@ -616,12 +641,23 @@ const paginatedInvoices = filteredInvoices.slice(
 ) : (
   <>
           {errorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">
+            <div className="ui-alert-error text-sm px-4 py-3 mb-4">
               {errorMsg}
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <div className="ui-card p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800">Customer and Items</h2>
+                <p className="text-xs text-slate-400 mt-1">Add customer details and products to this bill</p>
+              </div>
+              {editingInvoiceId && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                  Editing invoice
+                </span>
+              )}
+            </div>
             <div className="mb-4 flex flex-wrap gap-3">
               <div className="w-64">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Customer</label>
@@ -746,11 +782,11 @@ const paginatedInvoices = filteredInvoices.slice(
             </h3>
             <span className="text-xs text-gray-400">Scroll to view all items</span>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+          <div className="ui-card overflow-hidden mb-6">
             <div ref={itemsScrollRef} className="max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+                <tr className="ui-table-head border-b border-slate-200 text-left">
                   <th className="px-6 py-3 font-medium w-10">Sr.</th>
                   <th className="px-2 py-3 font-medium">Product</th>
                   <th className="px-2 py-3 font-medium w-28">Rate</th>
@@ -762,8 +798,11 @@ const paginatedInvoices = filteredInvoices.slice(
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td                     colSpan="5" className="px-6 py-10 text-center text-gray-300">
-                      No items added yet
+                    <td colSpan="5" className="px-6 py-10 text-center">
+                      <div className="ui-empty">
+                        <span className="ui-empty-title">No items added yet</span>
+                        <span>Search for a product above and add it to the bill.</span>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -815,15 +854,19 @@ const paginatedInvoices = filteredInvoices.slice(
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="ui-card p-5">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-slate-800">Payment and Summary</h2>
+              <p className="text-xs text-slate-400 mt-1">Review totals and record how the customer paid</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
                 <span className="text-xs font-medium text-gray-500 block">Sub Total</span>
                 <span className="text-lg font-semibold text-gray-800 mt-1 block">
                   ₹{subTotal.toFixed(2)}
                 </span>
               </div>
-              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
                 <label className="text-xs font-medium text-gray-500 block mb-2">Discount</label>
                 <input
                   type="number"
@@ -833,7 +876,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
                 <label className="text-xs font-medium text-gray-500 block mb-2">Payment Method</label>
                 <select
                   value={paymentMethod}
@@ -844,7 +887,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   <option value="credit">Credit</option>
                 </select>
               </div>
-              <div className="rounded-lg bg-gray-50 border border-gray-100 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
                 <span className="text-xs font-medium text-gray-500 block mb-2">Payment Summary</span>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Received</span>
@@ -860,7 +903,7 @@ const paginatedInvoices = filteredInvoices.slice(
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="rounded-lg border border-green-100 bg-green-50/50 p-4">
+              <div className="rounded-xl border border-green-100 bg-green-50/50 p-4">
                 <label className="text-xs font-medium text-green-700 block mb-2">Cash Received</label>
                 <input
                   type="number"
@@ -882,7 +925,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   }`}
                 />
               </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
                 <label className="text-xs font-medium text-blue-700 block mb-2">Online Received</label>
                 <input
                   type="number"
@@ -899,7 +942,7 @@ const paginatedInvoices = filteredInvoices.slice(
               </div>
             </div>
             {paymentErrorMsg && (
-              <div className="mt-3 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+              <div className="ui-alert-error mt-3 text-sm px-4 py-3">
                 {paymentErrorMsg}
               </div>
             )}
@@ -907,7 +950,7 @@ const paginatedInvoices = filteredInvoices.slice(
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-5 pt-5 border-t border-gray-100">
               <div>
                 <span className="text-xs text-gray-500 block">Grand Total</span>
-                <span className="text-2xl font-bold text-gray-900">₹{grandTotal.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-slate-900">₹{grandTotal.toFixed(2)}</span>
               </div>
               <button
                 type="button"
@@ -915,7 +958,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   void handleCreateInvoice();
                 }}
                 disabled={items.length === 0 || creating}
-                className="bg-blue-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="bg-blue-600 text-white text-sm font-medium px-6 py-3 rounded-xl shadow-sm shadow-blue-600/20 hover:bg-blue-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 {creating ? 'Saving Invoice...' : editingInvoiceId ? 'Save Invoice Changes' : 'Create Invoice'}
               </button>

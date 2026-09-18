@@ -7,6 +7,7 @@ import {
   Clock,
   AlertTriangle,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 function formatAmount(amount) {
@@ -58,10 +59,9 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-sm text-gray-400">
-          Loading dashboard...
-        </div>
+      <div className="ui-card ui-loading">
+        <Loader2 size={18} className="animate-spin text-blue-600" />
+        Loading dashboard...
       </div>
     );
   }
@@ -75,10 +75,11 @@ function Dashboard() {
 
         <button
           onClick={loadDashboard}
-          className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+          disabled={loading}
+          className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <RefreshCw size={15} />
-          Try Again
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Trying again...' : 'Try Again'}
         </button>
       </div>
     );
@@ -106,10 +107,11 @@ function Dashboard() {
 
         <button
           onClick={loadDashboard}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 bg-white shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw size={15} />
-          Refresh
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
@@ -117,7 +119,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
         {/* Today's Sales */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="ui-card p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">
@@ -139,7 +141,7 @@ function Dashboard() {
         </div>
 
         {/* Cash Received */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="ui-card p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">
@@ -166,7 +168,7 @@ function Dashboard() {
         </div>
 
         {/* Credit Sales */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="ui-card p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">
@@ -188,7 +190,7 @@ function Dashboard() {
         </div>
 
         {/* Today's Bills */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="ui-card p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500">
@@ -215,7 +217,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
         {/* Recent Bills */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="ui-card overflow-hidden">
 
           <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
             <div>
@@ -289,7 +291,7 @@ function Dashboard() {
         </div>
 
         {/* Today's Payments */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="ui-card overflow-hidden">
 
           <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
             <div>

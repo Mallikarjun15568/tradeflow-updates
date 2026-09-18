@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, DatabaseBackup, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, DatabaseBackup, ChevronDown, ChevronUp, RefreshCw, Eye } from 'lucide-react';
 
 
 function Settings() {
@@ -29,6 +29,10 @@ function Settings() {
     lock_settings: 'off',
   });
   const [securityPin, setSecurityPin] = useState('');
+  const [showSecurityPin, setShowSecurityPin] = useState(false);
+  const [showCurrentPin, setShowCurrentPin] = useState(false);
+  const [showNewPin, setShowNewPin] = useState(false);
+  const [showConfirmPin, setShowConfirmPin] = useState(false);
   const [securityMsg, setSecurityMsg] = useState('');
   const [securityError, setSecurityError] = useState('');
   const [securityExpanded, setSecurityExpanded] = useState(false);
@@ -156,24 +160,35 @@ const loadSettings = async () => {
   };
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-10">Loading...</div>;
+    return <div className="ui-card ui-loading">Loading settings...</div>;
   }
 
   return (
     <div className="max-w-2xl">
+      <div className="flex justify-end mb-4">
+        <button
+          type="button"
+          onClick={loadSettings}
+          disabled={loading}
+          className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
       {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg mb-4">
+        <div className="ui-alert-error text-sm px-4 py-3 mb-4">
           {errorMsg}
         </div>
       )}
       {savedMsg && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg mb-4">
+        <div className="ui-alert-success text-sm px-4 py-3 mb-4">
           {savedMsg}
         </div>
       )}
 
       {/* Shop Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="ui-card p-6 mb-6">
         <button
           type="button"
           onClick={() => setSecurityExpanded((expanded) => !expanded)}
@@ -215,10 +230,17 @@ const loadSettings = async () => {
             <p className="text-xs text-gray-400 mb-2">
               Enter your current Security PIN to save these settings.
             </p>
-            <input type="password" inputMode="numeric" maxLength={6} value={securityPin}
-            onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, ''))}
-            placeholder="Current Security PIN"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            <div className="relative">
+              <input type={showSecurityPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={securityPin}
+                onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="Current Security PIN"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm" />
+              <button type="button" onClick={() => setShowSecurityPin((visible) => !visible)}
+                aria-label={showSecurityPin ? 'Hide security PIN' : 'Show security PIN'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showSecurityPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+                <Eye size={16} />
+              </button>
+            </div>
           </div>
           {securityError && <div className="text-sm text-red-600">{securityError}</div>}
           {securityMsg && <div className="text-sm text-green-700">{securityMsg}</div>}
@@ -230,7 +252,7 @@ const loadSettings = async () => {
       </div>
 
       {/* Shop Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="ui-card p-6 mb-6">
         <button
           type="button"
           onClick={() => setPinExpanded((expanded) => !expanded)}
@@ -248,16 +270,37 @@ const loadSettings = async () => {
         </button>
         {pinExpanded && (
         <form onSubmit={handlePinChange} className="space-y-3 mt-5 pt-5 border-t border-gray-100">
-          <input type="password" inputMode="numeric" maxLength={6} value={currentPin}
-            onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
-            placeholder="Current PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          <div className="relative">
+            <input type={showCurrentPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={currentPin}
+              onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="Current PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm" />
+            <button type="button" onClick={() => setShowCurrentPin((visible) => !visible)}
+              aria-label={showCurrentPin ? 'Hide current PIN' : 'Show current PIN'}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showCurrentPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+              <Eye size={16} />
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input type="password" inputMode="numeric" maxLength={6} value={newPin}
-              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="New PIN (4-6 digits)" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            <input type="password" inputMode="numeric" maxLength={6} value={confirmPin}
-              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="Confirm new PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            <div className="relative">
+              <input type={showNewPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="New PIN (4-6 digits)" className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm" />
+              <button type="button" onClick={() => setShowNewPin((visible) => !visible)}
+                aria-label={showNewPin ? 'Hide new PIN' : 'Show new PIN'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showNewPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+                <Eye size={16} />
+              </button>
+            </div>
+            <div className="relative">
+              <input type={showConfirmPin ? 'text' : 'password'} inputMode="numeric" maxLength={6} value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="Confirm new PIN" className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm" />
+              <button type="button" onClick={() => setShowConfirmPin((visible) => !visible)}
+                aria-label={showConfirmPin ? 'Hide confirmation PIN' : 'Show confirmation PIN'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors ${showConfirmPin ? 'text-blue-400' : 'text-gray-400 hover:text-gray-700'}`}>
+                <Eye size={16} />
+              </button>
+            </div>
           </div>
           {pinError && <div className="text-sm text-red-600">{pinError}</div>}
           {pinMsg && <div className="text-sm text-green-700">{pinMsg}</div>}
@@ -269,7 +312,7 @@ const loadSettings = async () => {
       </div>
 
       {/* Shop Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="ui-card p-6 mb-6">
         <button type="button" onClick={() => setShopExpanded((expanded) => !expanded)}
           className="w-full flex items-center justify-between text-left">
           <div>
@@ -311,7 +354,7 @@ const loadSettings = async () => {
       </div>
 
       {/* Invoice Settings */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="ui-card p-6 mb-6">
         <button type="button" onClick={() => setInvoiceExpanded((expanded) => !expanded)}
           className="w-full flex items-center justify-between text-left">
           <div>
@@ -338,7 +381,7 @@ const loadSettings = async () => {
       </div>
 
 {/* Backup Settings */}
-<div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+<div className="ui-card p-6 mb-6">
   <button type="button" onClick={() => setBackupExpanded((expanded) => !expanded)}
     className="w-full flex items-start justify-between gap-4 text-left">
     <div>

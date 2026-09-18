@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { IndianRupee, Receipt, Wallet, CreditCard, RefreshCw, Download } from 'lucide-react';
+import { IndianRupee, Receipt, Wallet, CreditCard, RefreshCw, Download, Loader2 } from 'lucide-react';
 
 function formatMoney(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN', {
@@ -155,7 +155,7 @@ async function handleDownloadPDF() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-xl font-semibold text-slate-800 tracking-tight">
             Reports
           </h2>
 
@@ -167,16 +167,20 @@ async function handleDownloadPDF() {
         <button
           onClick={loadReport}
           disabled={loading}
-          className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-600 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 bg-white rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw size={15} />
-          Refresh
+          {loading ? (
+            <Loader2 size={15} className="animate-spin text-blue-600" />
+          ) : (
+            <RefreshCw size={15} />
+          )}
+          {loading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <div className="grid grid-cols-3 gap-4">
+      <div className="ui-card p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1.5 block">
@@ -230,19 +234,19 @@ async function handleDownloadPDF() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+        <div className="ui-alert-error text-sm px-4 py-3">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg">
+        <div className="ui-alert-success text-sm px-4 py-3">
           {success}
         </div>
       )}
 
       {/* Report */}
       {loading ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-sm text-gray-400">
+        <div className="ui-card ui-loading">
           Loading report...
         </div>
       ) : report ? (
@@ -292,7 +296,7 @@ async function handleDownloadPDF() {
             </div>
           </div>
             {/* Report Details */}
-<div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+<div className="ui-card overflow-x-auto">
   <div className="px-5 py-4 border-b border-gray-200">
     <h3 className="text-sm font-semibold text-gray-700">
       Report Details
@@ -305,7 +309,7 @@ async function handleDownloadPDF() {
   <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+        <tr className="ui-table-head border-b border-slate-200 text-left">
           <th className="px-5 py-3 font-medium">Invoice No.</th>
           <th className="px-5 py-3 font-medium">Customer</th>
           <th className="px-5 py-3 font-medium">Date</th>
