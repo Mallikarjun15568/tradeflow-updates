@@ -1,6 +1,5 @@
 const db = require("../database/connection");
 
-
 function validateCustomer(customer) {
   if (!customer || typeof customer.name !== 'string' || !customer.name.trim()) {
     throw new Error('Customer name is required');
@@ -12,18 +11,54 @@ function validateCustomer(customer) {
 
 function addCustomer(customer) {
     validateCustomer(customer);
+    const normalizedName = customer.name.trim().replace(/\s+/g, ' ');
+    const normalizedPhone = customer.phone?.trim() || '';
+    const existing = normalizedPhone
+      ? db.prepare(`
+        SELECT id, name, phone, address
+        FROM customers
+        WHERE phone = ?
+        ORDER BY id
+      `).all(normalizedPhone).find((candidate) =>
+        candidate.name.trim().replace(/\s+/g, ' ').toLowerCase() ===
+        normalizedName.toLowerCase()
+      )
+      : null;
+
+    if (existing) {
+        const address = customer.address?.trim() || existing.address || '';
+        db.prepare(`
+            UPDATE customers
+            SET address = ?
+            WHERE id = ?
+        `).run(address, existing.id);
+        return existing.id;
+    }
+
     const stmt = db.prepare(`
         INSERT INTO customers (name, phone, address)
         VALUES (@name, @phone, @address)
     `);
 
-    const result = stmt.run(customer);
+    const result = stmt.run({
+        ...customer,
+        name: normalizedName,
+        phone: customer.phone?.trim() || '',
+        address: customer.address?.trim() || '',
+    });
     return result.lastInsertRowid;
 }
 
 function getAllCustomers() {
     const stmt = db.prepare(`
-        SELECT * FROM customers
+        SELECT
+            c.*,
+            EXISTS(
+                SELECT 1
+                FROM invoices i
+                WHERE i.customer_id = c.id
+            ) AS has_history
+        FROM customers c
         ORDER BY name
     `);
 
@@ -41,6 +76,18 @@ function getCustomerById(id) {
 
 function updateCustomer(id, customer) {
     validateCustomer(customer);
+    const normalizedName = customer.name.trim().replace(/\s+/g, ' ');
+    const duplicate = customer.phone?.trim()
+      ? db.prepare(`
+        SELECT id, name
+        FROM customers
+        WHERE id != ? AND phone = ?
+        LIMIT 1
+      `).get(id, customer.phone.trim())
+      : null;
+    if (duplicate) {
+        throw new Error('A customer with this name already exists.');
+    }
     const stmt = db.prepare(`
         UPDATE customers
         SET name = @name,
@@ -51,6 +98,9 @@ function updateCustomer(id, customer) {
 
     const result = stmt.run({
         ...customer,
+        name: normalizedName,
+        phone: customer.phone?.trim() || '',
+        address: customer.address?.trim() || '',
         id
     });
     if (result.changes === 0) {

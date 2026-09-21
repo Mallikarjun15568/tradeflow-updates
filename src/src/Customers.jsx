@@ -8,6 +8,7 @@ import {
   Loader2,
   UsersRound,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 const emptyForm = { name: '', phone: '', address: '' };
 
@@ -145,6 +146,22 @@ function closeCustomerDetails() {
       address: form.address,
     };
 
+    const handleDelete = async (customer) => {
+      const confirmed = window.confirm(
+        `Delete "${customer.name}"?\n\nOnly customers without invoice or payment history can be deleted.`
+      );
+      if (!confirmed) return;
+
+      setActionError('');
+      try {
+        await window.api.customers.delete(customer.id);
+        await loadCustomers();
+        await loadCreditCustomers();
+      } catch (error) {
+        setActionError(error.message || 'Could not delete customer.');
+      }
+    };
+
     setSaving(true);
     setActionError('');
     try {
@@ -208,7 +225,8 @@ const filteredCustomers = (
                : `${customers.length} customers registered`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2 lg:flex-nowrap">
+          <div className="flex shrink-0 flex-nowrap items-center gap-2">
   <button
     type="button"
     onClick={async () => {
@@ -216,7 +234,7 @@ const filteredCustomers = (
       await loadCreditCustomers();
     }}
     disabled={loading}
-    className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+    className="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap border border-slate-200 bg-white text-slate-600 text-sm font-medium px-3.5 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
   >
     <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
     {loading ? 'Refreshing...' : 'Refresh'}
@@ -226,7 +244,7 @@ const filteredCustomers = (
       setCustomerFilter('all');
       setCurrentPage(1);
     }}
-    className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+    className={`inline-flex h-10 shrink-0 items-center whitespace-nowrap px-3 text-sm font-medium rounded-xl ${
       customerFilter === 'all'
         ? 'bg-blue-600 text-white'
         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -244,7 +262,7 @@ const filteredCustomers = (
         await loadCreditBills(customer.id);
       }
     }}
-    className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+    className={`inline-flex h-10 shrink-0 items-center whitespace-nowrap px-3 text-sm font-medium rounded-xl ${
       customerFilter === 'credit'
         ? 'bg-blue-600 text-white'
         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -252,7 +270,7 @@ const filteredCustomers = (
   >
     Credit Customers
   </button>
-</div>
+          </div>
         <div className="relative w-full lg:w-72">
   <Search
     size={16}
@@ -272,11 +290,12 @@ const filteredCustomers = (
 </div>
         <button
           onClick={openAddModal}
-          className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-600/20"
+          className="flex shrink-0 items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-600/20"
         >
           <Plus size={16} />
           Add Customer
         </button>
+        </div>
       </div>
 
       <div className="ui-card overflow-x-auto">
@@ -354,9 +373,19 @@ const filteredCustomers = (
                       <button
                         onClick={() => openEditModal(customer)}
                         className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md"
+                        aria-label={`Edit ${customer.name}`}
                       >
                         <Pencil size={15} />
                       </button>
+                      {!customer.has_history && (
+                        <button
+                          onClick={() => handleDelete(customer)}
+                          className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md"
+                          aria-label={`Delete ${customer.name}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

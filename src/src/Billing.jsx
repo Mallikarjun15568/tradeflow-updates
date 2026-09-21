@@ -13,6 +13,9 @@ const getUnitQuantity = (unit) => {
   return numericUnit ? Number(numericUnit[0]) : 1;
 };
 
+const normalizeCustomerName = (name) =>
+  String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
 function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplete, onEditInvoice }) {
   const draftKey = 'tradeflow_billing_draft';
   const [activeTab, setActiveTab] = useState('new');
@@ -202,9 +205,17 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
     setPaymentErrorMsg('');
   };
 
-  const matchedCustomer = customers.find(
-    (c) => c.name.toLowerCase() === customerName.trim().toLowerCase()
+  const nameMatches = customers.filter(
+    (c) => normalizeCustomerName(c.name) === normalizeCustomerName(customerName)
   );
+  const phoneMatch = customerPhone.trim()
+    ? customers.find((c) =>
+      c.phone === customerPhone.trim() &&
+      normalizeCustomerName(c.name) === normalizeCustomerName(customerName)
+    )
+    : null;
+  const matchedCustomer = phoneMatch ||
+    (!customerPhone.trim() && nameMatches.length === 1 ? nameMatches[0] : null);
 
   const matchedProduct = products.find(
     (p) => p.name.trim().toLowerCase() === productSearch.trim().toLowerCase()
@@ -667,7 +678,12 @@ const paginatedInvoices = filteredInvoices.slice(
                   placeholder="Customer name"
                   value={customerName}
                   onChange={(e) => { const value = e.target.value; setCustomerName(value);
-                    const customer = customers.find((c) => c.name.toLowerCase() === value.trim().toLowerCase());
+                    const matchingCustomers = customers.filter(
+                      (c) => normalizeCustomerName(c.name) === normalizeCustomerName(value)
+                    );
+                    const customer = matchingCustomers.length === 1
+                      ? matchingCustomers[0]
+                      : null;
 
                   if (customer) {
                     setCustomerPhone(customer.phone || '');
@@ -715,7 +731,11 @@ const paginatedInvoices = filteredInvoices.slice(
               </div>
             )}
             {customerName.trim() && !matchedCustomer && (
-              <div className="mb-4 text-xs text-blue-600">New customer — will be added automatically</div>
+              <div className="mb-4 text-xs text-blue-600">
+                {nameMatches.length > 1
+                  ? 'Multiple customers have this name — enter the correct phone number to select one.'
+                  : 'New customer — will be added automatically'}
+              </div>
             )}
             {paymentMethod === 'credit' && !customerName.trim() && (
               <div className="mb-4 text-xs text-orange-600">
