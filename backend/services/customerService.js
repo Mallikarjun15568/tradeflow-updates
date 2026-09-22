@@ -13,26 +13,18 @@ function addCustomer(customer) {
     validateCustomer(customer);
     const normalizedName = customer.name.trim().replace(/\s+/g, ' ');
     const normalizedPhone = customer.phone?.trim() || '';
-    const existing = normalizedPhone
-      ? db.prepare(`
-        SELECT id, name, phone, address
+    const existing = db.prepare(`
+        SELECT id, name, phone
         FROM customers
-        WHERE phone = ?
         ORDER BY id
-      `).all(normalizedPhone).find((candidate) =>
+    `).all().find((candidate) =>
         candidate.name.trim().replace(/\s+/g, ' ').toLowerCase() ===
-        normalizedName.toLowerCase()
-      )
-      : null;
+          normalizedName.toLowerCase() &&
+        (candidate.phone || '').trim() === normalizedPhone
+    );
 
     if (existing) {
-        const address = customer.address?.trim() || existing.address || '';
-        db.prepare(`
-            UPDATE customers
-            SET address = ?
-            WHERE id = ?
-        `).run(address, existing.id);
-        return existing.id;
+        throw new Error('Customer already exists with this name and phone number.');
     }
 
     const stmt = db.prepare(`

@@ -140,6 +140,18 @@ function closeCustomerDetails() {
     setActionError('Phone number must be exactly 10 digits.');
     return;
   }
+    if (!editingId) {
+      const normalizedName = form.name.trim().replace(/\s+/g, ' ').toLowerCase();
+      const normalizedPhone = form.phone.trim();
+      const alreadyExists = customers.some((customer) =>
+        customer.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName &&
+        (customer.phone || '').trim() === normalizedPhone
+      );
+      if (alreadyExists) {
+        setActionError('Customer already exists with this name and phone number.');
+        return;
+      }
+    }
     const payload = {
       name: form.name,
       phone: form.phone,
@@ -176,7 +188,11 @@ function closeCustomerDetails() {
       await loadCreditCustomers();
     } catch (error) {
       console.error('Failed to save customer:', error);
-      setActionError(error.message || 'Could not save customer. Please try again.');
+      setActionError(
+        error.message?.includes('already exists')
+          ? 'Customer already exists with this name and phone number.'
+          : error.message || 'Could not save customer. Please try again.'
+      );
     } finally {
       setSaving(false);
     }
