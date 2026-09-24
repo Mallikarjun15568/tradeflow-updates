@@ -399,6 +399,10 @@ function getCustomerTransactions(customerId) {
    ========================================================= */
 
 function deleteCustomer(id) {
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+        throw new Error('Invalid customer selected.');
+    }
+
     const deleteTransaction = db.transaction(() => {
         const usage = db.prepare(`
           SELECT EXISTS(SELECT 1 FROM invoices WHERE customer_id = ?) AS invoice_usage

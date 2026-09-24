@@ -26,6 +26,7 @@ function Customers({onViewCustomer}) {
   const [customerOverview, setCustomerOverview] = useState(null);
   const [customerTransactions, setCustomerTransactions] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [customerFilter, setCustomerFilter] = useState('all');
   const [creditCustomers, setCreditCustomers] = useState([]);
@@ -126,6 +127,29 @@ function closeCustomerDetails() {
     setForm(emptyForm);
   };
 
+  const handleDelete = async (customer) => {
+    setDeleteTarget(customer);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setActionError('');
+    try {
+      const result = await window.api.customers.delete(deleteTarget.id);
+      if (!result?.success) {
+        setActionError(result?.message || 'Could not delete customer.');
+        return;
+      }
+      setDeleteTarget(null);
+      await loadCustomers();
+      await loadCreditCustomers();
+    } catch (error) {
+      setActionError(error.message || 'Could not delete customer.');
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
   const handleSave = async () => {
     if (saving) return;
     setActionError('');
@@ -156,22 +180,6 @@ function closeCustomerDetails() {
       name: form.name,
       phone: form.phone,
       address: form.address,
-    };
-
-    const handleDelete = async (customer) => {
-      const confirmed = window.confirm(
-        `Delete "${customer.name}"?\n\nOnly customers without invoice or payment history can be deleted.`
-      );
-      if (!confirmed) return;
-
-      setActionError('');
-      try {
-        await window.api.customers.delete(customer.id);
-        await loadCustomers();
-        await loadCreditCustomers();
-      } catch (error) {
-        setActionError(error.message || 'Could not delete customer.');
-      }
     };
 
     setSaving(true);
@@ -228,6 +236,33 @@ const filteredCustomers = (
       {actionError && (
         <div className="ui-alert-error mb-4 px-4 py-3 text-sm">
           {actionError}
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-800">Delete customer?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Delete <span className="font-medium text-slate-700">{deleteTarget.name}</span>?
+              Customers with invoice history cannot be deleted.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
@@ -395,7 +430,12 @@ const filteredCustomers = (
                       </button>
                       {!customer.has_history && (
                         <button
-                          onClick={() => handleDelete(customer)}
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleDelete(customer);
+                          }}
                           className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md"
                           aria-label={`Delete ${customer.name}`}
                         >

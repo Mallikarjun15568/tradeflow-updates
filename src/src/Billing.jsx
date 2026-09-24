@@ -42,7 +42,12 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
   const itemsScrollRef = useRef(null);
   const [historySearch, setHistorySearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
+  const [deleteModalStep, setDeleteModalStep] = useState(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deletingInvoices, setDeletingInvoices] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const draftLoadedRef = useRef(false);
   const historyPerPage = 10;
@@ -115,6 +120,18 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
       itemsScrollRef.current.scrollTop = itemsScrollRef.current.scrollHeight;
     }
   }, [items.length]);
+
+  useEffect(() => {
+    setSelectedInvoiceIds([]);
+  }, [historySearch, paymentFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    setSelectedInvoiceIds((current) => {
+      const availableIds = new Set(invoices.map((invoice) => invoice.id));
+      const next = current.filter((id) => availableIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [invoices]);
 
   useEffect(() => {
     try {
@@ -316,8 +333,10 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
       // Payment filter 
       const matchesPayment = paymentFilter === 'all' || inv.payment_method === paymentFilter;
 
-      // Date filter
-      const matchesDate = !dateFilter ||String(inv.invoice_date || '').slice(0, 10) === dateFilter;
+      const invoiceDate = String(inv.invoice_date || '').slice(0, 10);
+      const matchesDate =
+        (!dateFrom || invoiceDate >= dateFrom) &&
+        (!dateTo || invoiceDate <= dateTo);
 
        return matchesSearch && matchesPayment && matchesDate;
   });
@@ -336,6 +355,62 @@ const paginatedInvoices = filteredInvoices.slice(
   (safeHistoryPage - 1) * historyPerPage,
   safeHistoryPage * historyPerPage
 );
+
+  const allFilteredSelected =
+    filteredInvoices.length > 0 &&
+    filteredInvoices.every((invoice) => selectedInvoiceIds.includes(invoice.id));
+  const selectedInvoiceTotal = invoices
+    .filter((invoice) => selectedInvoiceIds.includes(invoice.id))
+    .reduce((total, invoice) => total + Number(invoice.grand_total || 0), 0);
+
+  const toggleInvoiceSelection = (invoiceId) => {
+    setSelectedInvoiceIds((current) =>
+      current.includes(invoiceId)
+        ? current.filter((id) => id !== invoiceId)
+        : [...current, invoiceId]
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedInvoiceIds([]);
+      return;
+    }
+    setSelectedInvoiceIds(filteredInvoices.map((invoice) => invoice.id));
+  };
+
+  const openDeleteSelected = () => {
+    if (selectedInvoiceIds.length === 0) {
+      setErrorMsg('Select at least one invoice to delete.');
+      return;
+    }
+    setDeletePin('');
+    setDeleteModalStep('confirm');
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingInvoices) return;
+    setDeleteModalStep(null);
+    setDeletePin('');
+  };
+
+  const deleteSelectedInvoices = async () => {
+    if (!deletePin.trim() || deletingInvoices) return;
+    setDeletingInvoices(true);
+    setErrorMsg('');
+    try {
+      await window.api.billing.deleteInvoices(selectedInvoiceIds, deletePin);
+      setSelectedInvoiceIds([]);
+      await loadData();
+    } catch (error) {
+      setErrorMsg(error.message || 'Could not delete selected invoices.');
+    } finally {
+      // Always release the modal overlay so an IPC or refresh error cannot leave the page blocked.
+      setDeleteModalStep(null);
+      setDeletePin('');
+      setDeletingInvoices(false);
+    }
+  };
 
   const handleCreateInvoice = async () => {
     setErrorMsg('');
@@ -525,24 +600,46 @@ const paginatedInvoices = filteredInvoices.slice(
         </select>
 
         {/* Date Filter */}
-        <input type="date" value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); setHistoryPage(1);
-       }}
-        className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => { setDateFrom(e.target.value); setHistoryPage(1); }}
+          aria-label="From date"
+          className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => { setDateTo(e.target.value); setHistoryPage(1); }}
+          aria-label="To date"
+          className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
 
         {/* Clear */}
-       {(historySearch || paymentFilter !== 'all' || dateFilter) && (
+       {(historySearch || paymentFilter !== 'all' || dateFrom || dateTo) && (
        <button
         onClick={() => {
         setHistorySearch('');
         setPaymentFilter('all');
-        setDateFilter('');
+        setDateFrom('');
+        setDateTo('');
         setHistoryPage(1);
         }}
         className="text-sm text-gray-500 hover:text-gray-800"
         >
           Clear
         </button>
+        )}
+
+        {selectedInvoiceIds.length > 0 && (
+          <button
+            type="button"
+            onClick={openDeleteSelected}
+            className="ml-auto inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            <Trash2 size={15} />
+            Delete Selected ({selectedInvoiceIds.length})
+          </button>
         )}
 
       </div>
@@ -553,6 +650,15 @@ const paginatedInvoices = filteredInvoices.slice(
       <table className="w-full text-sm">
         <thead>
           <tr className="ui-table-head border-b border-slate-200 text-left">
+            <th className="px-4 py-3 font-medium w-12">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAllFiltered}
+                aria-label="Select all filtered invoices"
+                disabled={filteredInvoices.length === 0}
+              />
+            </th>
             <th className="px-6 py-3 font-medium">Invoice No.</th>
             <th className="px-6 py-3 font-medium">Customer</th>
             <th className="px-6 py-3 font-medium">Date</th>
@@ -565,7 +671,7 @@ const paginatedInvoices = filteredInvoices.slice(
           {paginatedInvoices.length === 0 ? (
             <tr>
               <td
-                colSpan="5"
+                colSpan="6"
                 className="px-6 py-10 text-center text-slate-500"
               >
                 <div className="ui-empty">
@@ -581,6 +687,14 @@ const paginatedInvoices = filteredInvoices.slice(
                 className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
                 onClick={() => onViewInvoice?.(inv.id)}
               >
+                <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedInvoiceIds.includes(inv.id)}
+                    onChange={() => toggleInvoiceSelection(inv.id)}
+                    aria-label={`Select ${inv.invoice_number}`}
+                  />
+                </td>
                 <td className="px-6 py-3 font-medium text-gray-800">
                   {inv.invoice_number}
                 </td>
@@ -647,6 +761,59 @@ const paginatedInvoices = filteredInvoices.slice(
         </div>
       )}
     </div>
+
+    {deleteModalStep && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          {deleteModalStep === 'confirm' ? (
+            <>
+              <h3 className="text-lg font-semibold text-slate-800">Delete selected invoices?</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                {selectedInvoiceIds.length} invoice{selectedInvoiceIds.length === 1 ? '' : 's'} and their
+                payment records will be permanently deleted. Product stock will be restored and the
+                customer records will remain safe.
+              </p>
+              <p className="mt-2 text-sm font-medium text-slate-700">
+                Total selected amount: ₹{selectedInvoiceTotal.toFixed(2)}
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" onClick={closeDeleteModal} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => setDeleteModalStep('pin')} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+                  Continue
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-slate-800">Owner PIN required</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Enter the Owner Security PIN to delete {selectedInvoiceIds.length} selected invoice{selectedInvoiceIds.length === 1 ? '' : 's'}.
+              </p>
+              <input
+                autoFocus
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={deletePin}
+                onChange={(event) => setDeletePin(event.target.value.replace(/\D/g, ''))}
+                placeholder="Owner PIN"
+                className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" onClick={closeDeleteModal} disabled={deletingInvoices} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button type="button" onClick={deleteSelectedInvoices} disabled={!deletePin.trim() || deletingInvoices} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {deletingInvoices ? 'Deleting...' : 'Delete Permanently'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
 
   </div>
 ) : (

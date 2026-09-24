@@ -1,5 +1,6 @@
 const db = require('../database/connection');
 const customerService = require('./customerService');
+const settingsService = require('./settingsService');
 const { getProductById } = require('./productService');
 
 function createInvoice(invoiceData) {
@@ -453,29 +454,63 @@ function updateInvoice(invoiceId, invoiceData) {
   return updateTransaction();
 }
 
-function deleteInvoice(invoiceId) {
+function deleteInvoice(invoiceId, ownerPin) {
+  return deleteInvoices([invoiceId], ownerPin);
+}
+
+function deleteInvoices(invoiceIds, ownerPin) {
+  if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+    throw new Error('Select at least one invoice to delete.');
+  }
+
+  if (!settingsService.verifySecurityPin(ownerPin)) {
+    throw new Error('Owner PIN is required or incorrect.');
+  }
+
+  const normalizedIds = [...new Set(invoiceIds.map((id) => Number(id)))];
+  if (normalizedIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    throw new Error('Invalid invoice selection.');
+  }
+
   const deleteTransaction = db.transaction(() => {
-    const invoice = db.prepare(`SELECT id FROM invoices WHERE id = ?`).get(invoiceId);
-    if (!invoice) throw new Error(`Invoice ID ${invoiceId} not found`);
+    const placeholders = normalizedIds.map(() => '?').join(', ');
+    const invoices = db.prepare(`
+      SELECT id FROM invoices WHERE id IN (${placeholders})
+    `).all(...normalizedIds);
+
+    if (invoices.length !== normalizedIds.length) {
+      throw new Error('One or more selected invoices no longer exist. Refresh and try again.');
+    }
+
     const items = db.prepare(`
-      SELECT product_id, quantity FROM invoice_items WHERE invoice_id = ?
-    `).all(invoiceId);
-    const restoreStock = db.prepare(`UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`);
+      SELECT product_id, quantity
+      FROM invoice_items
+      WHERE invoice_id IN (${placeholders})
+    `).all(...normalizedIds);
+    const restoreStock = db.prepare(`
+      UPDATE products
+      SET stock_quantity = stock_quantity + ?
+      WHERE id = ?
+    `);
     const stockLog = db.prepare(`
       INSERT INTO stock_transactions (product_id, change_quantity, reason)
       VALUES (?, ?, ?)
     `);
+
     for (const item of items) {
       if (item.product_id) {
         restoreStock.run(item.quantity, item.product_id);
         stockLog.run(item.product_id, item.quantity, 'invoice deleted');
       }
     }
-    db.prepare(`DELETE FROM payments WHERE invoice_id = ?`).run(invoiceId);
-    db.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(invoiceId);
-    db.prepare(`DELETE FROM invoices WHERE id = ?`).run(invoiceId);
-    return { success: true };
+
+    db.prepare(`DELETE FROM payments WHERE invoice_id IN (${placeholders})`).run(...normalizedIds);
+    db.prepare(`DELETE FROM invoice_items WHERE invoice_id IN (${placeholders})`).run(...normalizedIds);
+    db.prepare(`DELETE FROM invoices WHERE id IN (${placeholders})`).run(...normalizedIds);
+
+    return { success: true, deletedCount: normalizedIds.length };
   });
+
   return deleteTransaction();
 }
 
@@ -523,6 +558,7 @@ module.exports = {
   getAllInvoices,
   updateInvoice,
   deleteInvoice,
+  deleteInvoices,
   getInvoiceWithItems,
   addPayment,
   getInvoicePayments
