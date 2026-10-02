@@ -16,7 +16,14 @@ const getUnitQuantity = (unit) => {
 const normalizeCustomerName = (name) =>
   String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplete, onEditInvoice }) {
+function Billing({
+  onInvoiceCreated,
+  onViewInvoice,
+  editInvoiceId,
+  onEditComplete,
+  onEditInvoice,
+  onEditInvoiceUnavailable,
+}) {
   const draftKey = 'tradeflow_billing_draft';
   const [activeTab, setActiveTab] = useState('new');
   const [customers, setCustomers] = useState([]);
@@ -108,6 +115,11 @@ function Billing({ onInvoiceCreated, onViewInvoice, editInvoiceId, onEditComplet
         })));
         setErrorMsg('');
       } catch (error) {
+        if (String(error.message || '').includes('Invoice ID') &&
+          String(error.message || '').includes('not found')) {
+          onEditInvoiceUnavailable?.();
+          return;
+        }
         setErrorMsg(error.message || 'Could not load invoice for editing.');
       }
     };
@@ -443,7 +455,7 @@ const paginatedInvoices = filteredInvoices.slice(
     const finalTotalReceived = defaultCashAmount + normalizedOnlineAmount;
     if (!Number.isFinite(defaultCashAmount) || defaultCashAmount < 0 ||
       !Number.isFinite(normalizedOnlineAmount) || normalizedOnlineAmount < 0 ||
-      finalTotalReceived > grandTotal) {
+      (!editingInvoiceId && finalTotalReceived > grandTotal)) {
       setPaymentErrorMsg('Cash and online payments cannot be greater than the invoice total.');
       return;
     }

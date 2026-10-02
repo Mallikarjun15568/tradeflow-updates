@@ -187,6 +187,13 @@ function App() {
     setActiveSection('billing');
   };
 
+  const handleUnavailableInvoice = () => {
+    setViewingInvoiceId(null);
+    setInvoiceViewOnly(false);
+    setEditingInvoiceId(null);
+    setActiveSection('billing');
+  };
+
   const openSection = (sectionId) => {
     window.api.settings.getAll().then((settings) => {
       setSecuritySettings(settings);
@@ -376,6 +383,7 @@ function App() {
       setInvoiceViewOnly(false);
     }}
     onEdit={() => openInvoiceEditor(viewingInvoiceId)}
+    onInvoiceUnavailable={handleUnavailableInvoice}
   />
 ) : viewingCustomerId ? (
   <CustomerDetails
@@ -404,6 +412,7 @@ function App() {
     editInvoiceId={editingInvoiceId}
     onEditComplete={() => setEditingInvoiceId(null)}
     onEditInvoice={openInvoiceEditor}
+    onEditInvoiceUnavailable={() => setEditingInvoiceId(null)}
   />
 ) : activeSection === 'stock' ? (
   <Stock />

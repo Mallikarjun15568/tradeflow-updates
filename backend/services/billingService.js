@@ -382,12 +382,8 @@ function updateInvoice(invoiceId, invoiceData) {
       throw new Error('Payment amounts cannot be negative');
     }
     const requestedTotalPayment = requestedCashAmount + requestedOnlineAmount;
-    if (requestedTotalPayment > grandTotal) {
+    if (requestedTotalPayment > grandTotal && requestedTotalPayment > existingPaid) {
       throw new Error('Cash and online payments cannot be greater than the invoice total');
-    }
-    if (requestedPaymentMethod !== 'credit' &&
-      requestedTotalPayment < existingPaid) {
-      throw new Error('Invoice total cannot be less than payments already received');
     }
     const paid = requestedTotalPayment;
 

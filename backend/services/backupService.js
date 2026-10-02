@@ -32,14 +32,28 @@ function getTodayDate() {
   }).format(new Date());
 }
 
+function getBackupTimestamp() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date()).reduce((result, part) => {
+    if (part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}-${parts.hour}-${parts.minute}-${parts.second}`;
+}
+
 async function createBackup() {
   ensureBackupDir();
 
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/T/, '-')
-    .replace(/:/g, '-')
-    .replace(/\..+/, '');
+  const timestamp = getBackupTimestamp();
 
   const backupPath = path.join(
     backupDir,
@@ -166,11 +180,7 @@ async function restoreBackup(fileName) {
   // 1. Current DB ka safety backup
   // --------------------------------
 
-  const safetyTimestamp = new Date()
-    .toISOString()
-    .replace(/T/, '-')
-    .replace(/:/g, '-')
-    .replace(/\..+/, '');
+  const safetyTimestamp = getBackupTimestamp();
 
   const safetyPath = path.join(
     backupDir,

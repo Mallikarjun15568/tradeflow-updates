@@ -20,7 +20,7 @@
   });
 }
 
-  function Invoice({ invoiceId, onBack, onEdit, readOnly = false }) {
+  function Invoice({ invoiceId, onBack, onEdit, onInvoiceUnavailable, readOnly = false }) {
     const [invoice, setInvoice] = useState(null);
     const [customer, setCustomer] = useState(null);
     const [shopSettings, setShopSettings] = useState({});
@@ -53,7 +53,12 @@
       } catch (error) {
         console.error('Failed to load invoice:', error);
         if (requestId === invoiceRequestRef.current) {
-          setPrintError(error.message || 'Could not load invoice.');
+          if (String(error.message || '').includes('Invoice ID') &&
+            String(error.message || '').includes('not found')) {
+            onInvoiceUnavailable?.();
+          } else {
+            setPrintError(error.message || 'Could not load invoice.');
+          }
         }
       } finally {
         if (requestId === invoiceRequestRef.current) {
@@ -257,13 +262,12 @@
 
   gridTemplateRows:
     pageItems.length < ITEMS_PER_PAGE
-      ? `auto repeat(${pageItems.length}, auto) 1fr`
-      : `auto repeat(${pageItems.length}, auto)`,
+      ? `auto repeat(${pageItems.length}, minmax(0, auto)) 1fr`
+      : `auto repeat(${pageItems.length}, minmax(0, auto))`,
 
   border: '1px solid #000',
-  borderBottom: 'none',
+  borderBottom: '1px solid #000',
   minHeight: 0,
-
   alignContent: 'start',
 }}
 >
@@ -324,6 +328,7 @@
         className="px-2 py-1 text-gray-700"
         style={{
           borderRight: '1px solid #999',
+          minHeight: 0,
         }}
       >
         {startNumber + idx + 1}
@@ -333,6 +338,7 @@
         className="px-3 py-1 text-gray-900 font-medium"
         style={{
           borderRight: '1px solid #999',
+          minHeight: 0,
         }}
       >
         {item.custom_name} 
@@ -342,6 +348,7 @@
         className="px-2 py-1 text-center text-gray-700"
         style={{
           borderRight: '1px solid #999',
+          minHeight: 0,
         }}
       >
         {item.price.toFixed(2)}
@@ -351,6 +358,7 @@
         className="px-2 py-1 text-right text-gray-700"
         style={{
           borderRight: '1px solid #999',
+          minHeight: 0,
         }}
       >
         {item.quantity}
@@ -358,6 +366,7 @@
 
       <div
         className="px-3 py-1 text-right text-gray-900"
+        style={{ minHeight: 0 }}
       >
         {item.subtotal.toFixed(2)}
       </div>
@@ -367,43 +376,14 @@
   {/* Remaining blank area on the final item page */}
   {pageItems.length < ITEMS_PER_PAGE && (
     <>
-      <div
-        style={{
-          borderRight: '1px solid #999',
-          minHeight: 0,
-        }}
-      />
-
-      <div
-        style={{
-          borderRight: '1px solid #999',
-          minHeight: 0,
-        }}
-      />
-
-      <div
-        style={{
-          borderRight: '1px solid #999',
-          minHeight: 0,
-        }}
-      />
-
-      <div
-        style={{
-          borderRight: '1px solid #999',
-          minHeight: 0,
-        }}
-      />
-
-      <div
-        style={{
-          borderRight: '1px solid #999',
-          minHeight: 0,
-        }}
-      />
-
+      <div style={{ borderRight: '1px solid #999', minHeight: 0 }} />
+      <div style={{ borderRight: '1px solid #999', minHeight: 0 }} />
+      <div style={{ borderRight: '1px solid #999', minHeight: 0 }} />
+      <div style={{ borderRight: '1px solid #999', minHeight: 0 }} />
+      <div style={{ borderRight: '1px solid #999', minHeight: 0 }} />
     </>
   )}
+
 </div>
 
                 {/* Totals — only on the last page */}
@@ -445,7 +425,7 @@
                 )}
 
                 {/* Footer — on every page */}
-                <div className="invoice-footer px-8 pb-5 pt-3 text-xs text-gray-400 border-t border-gray-100">
+                <div className="invoice-footer relative top-1 px-8 pb-5 pt-3 text-xs text-gray-400 border-t border-gray-100">
                   {isLastPage ? (
                     <div className="flex items-end justify-between gap-4">
                       <div>

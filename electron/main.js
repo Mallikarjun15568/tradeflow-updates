@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { machineIdSync } = require("node-machine-id");
 const { autoUpdater } = require("electron-updater");
@@ -10,6 +10,8 @@ const customerService = require("../backend/services/customerService");
 const productService = require("../backend/services/productService");
 const billingService = require("../backend/services/billingService");
 const backupService = require("../backend/services/backupService");
+
+let mainWindow = null;
 
 function getDeviceId() {
     return machineIdSync();
@@ -23,6 +25,10 @@ function createWindow() {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
         }
+    });
+    mainWindow = win;
+    win.on("closed", () => {
+        if (mainWindow === win) mainWindow = null;
     });
 
     if (app.isPackaged) {
@@ -41,8 +47,55 @@ function checkForUpdates() {
         return;
     }
 
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.checkForUpdates().catch((error) => {
+        console.error("Update check failed:", error);
+    });
 }
+
+autoUpdater.on("error", (error) => {
+    console.error("Application update failed:", error);
+});
+
+autoUpdater.on("update-available", async (info) => {
+    try {
+        await backupService.createBackup();
+        await autoUpdater.downloadUpdate();
+    } catch (error) {
+        console.error("Pre-update backup or download failed:", error);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            await dialog.showMessageBox(mainWindow, {
+                type: "error",
+                title: "Update not installed",
+                message: "TradeFlow could not prepare the update safely.",
+                detail: "Your current app and data were not changed. Please try again later.",
+            });
+        }
+    }
+});
+
+autoUpdater.on("update-not-available", () => {
+    console.log("TradeFlow is up to date.");
+});
+
+autoUpdater.on("update-downloaded", async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const result = await dialog.showMessageBox(mainWindow, {
+        type: "info",
+        buttons: ["Install Update", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Update ready",
+        message: "A new TradeFlow update is ready.",
+        detail: "A fresh backup was created before downloading this update. Install now?",
+    });
+
+    if (result.response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+    }
+});
 
 function printCurrentPage(event, silent) {
     return new Promise((resolve, reject) => {
