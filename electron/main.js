@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const { machineIdSync } = require("node-machine-id");
 const { autoUpdater } = require("electron-updater");
 
@@ -145,8 +146,45 @@ function printCurrentPage(event, silent) {
     });
 }
 
+async function downloadCurrentInvoice(event, invoiceNumber) {
+    if (event.sender.isDestroyed()) {
+        throw new Error("Invoice window is no longer available");
+    }
+
+    const normalizedInvoiceNumber = String(invoiceNumber || "").trim();
+    if (!normalizedInvoiceNumber || !/^[a-zA-Z0-9._-]+$/.test(normalizedInvoiceNumber)) {
+        throw new Error("Invalid invoice number");
+    }
+
+    const invoicesDirectory = path.join(
+        app.getPath("downloads"),
+        "TradeFlow",
+        "Invoices"
+    );
+    fs.mkdirSync(invoicesDirectory, { recursive: true });
+
+    const filePath = path.join(invoicesDirectory, `${normalizedInvoiceNumber}.pdf`);
+    const pdfData = await event.sender.printToPDF({
+        printBackground: true,
+        pageSize: "A5",
+        margins: {
+            marginType: "custom",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+        },
+    });
+
+    fs.writeFileSync(filePath, pdfData);
+    return { success: true, filePath };
+}
+
 ipcMain.handle("billing:print", (event) => printCurrentPage(event, false));
 ipcMain.handle("billing:quickPrint", (event) => printCurrentPage(event, true));
+ipcMain.handle("billing:downloadPDF", (event, invoiceNumber) =>
+    downloadCurrentInvoice(event, invoiceNumber)
+);
 
 app.whenReady().then(async () => {
 

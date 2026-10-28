@@ -4,6 +4,15 @@ import { Plus, Pencil, X, Search, Loader2, PackageOpen, RefreshCw } from 'lucide
 const emptyForm = { name: '', unit: 'pcs', selling_price: '', stock_quantity: '' };
 
 function Products() {
+  const pageStateKey = 'tradeflow_products_list_state';
+  const savedPageState = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(pageStateKey) || '{}');
+    } catch (error) {
+      console.error('Failed to restore product list state:', error);
+      return {};
+    }
+  })();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -14,9 +23,17 @@ function Products() {
   const [editingSize, setEditingSize] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showCustomUnit, setShowCustomUnit] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(savedPageState.currentPage || 1);
   const itemsPerPage = 10;
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(savedPageState.search || '');
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(pageStateKey, JSON.stringify({ currentPage, search }));
+    } catch (error) {
+      console.error('Failed to save product list state:', error);
+    }
+  }, [currentPage, search]);
   const unitLabels = {
     pcs: 'Pcs',
     dozen: '12pcs',

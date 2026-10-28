@@ -3,6 +3,32 @@ const customerService = require('./customerService');
 const settingsService = require('./settingsService');
 const { getProductById } = require('./productService');
 
+function getCustomerOutstanding(customerId, excludeInvoiceId = null) {
+  const invoiceExclusion = excludeInvoiceId ? 'AND i.id != ?' : '';
+  const parameters = excludeInvoiceId ? [customerId, excludeInvoiceId] : [customerId];
+  const result = db.prepare(`
+    SELECT
+      COALESCE(c.opening_balance, 0) +
+      COALESCE((
+        SELECT SUM(i.grand_total - COALESCE((
+          SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id
+        ), 0))
+        FROM invoices i
+        WHERE i.customer_id = c.id
+          ${invoiceExclusion}
+      ), 0) -
+      COALESCE((
+        SELECT SUM(ba.amount)
+        FROM balance_adjustments ba
+        WHERE ba.customer_id = c.id
+      ), 0) AS outstanding
+    FROM customers c
+    WHERE c.id = ?
+  `).get(...parameters);
+
+  return Math.max(0, Number(result?.outstanding || 0));
+}
+
 function createInvoice(invoiceData) {
   if (!invoiceData || typeof invoiceData !== 'object') {
     throw new Error('Invoice data is required');
@@ -11,6 +37,10 @@ function createInvoice(invoiceData) {
   const normalizedDiscount = Number(discount);
   const normalizedTax = Number(tax);
   const effectiveCustomerId = customer_id ? customer_id : null;
+  const previousDueAdded = Number(invoiceData.previous_due_added || 0);
+  if (!Number.isFinite(previousDueAdded) || previousDueAdded < 0) {
+    throw new Error('Previous due amount is invalid');
+  }
 
   let customerSnapshot = { customer_name: null, customer_address: null, customer_phone: null };
   if (!['cash', 'credit'].includes(invoiceData.payment_method)) {
@@ -49,6 +79,14 @@ function createInvoice(invoiceData) {
   }
 
   const createInvoiceTransaction = db.transaction(() => {
+    if (effectiveCustomerId) {
+      if (previousDueAdded > getCustomerOutstanding(effectiveCustomerId)) {
+        throw new Error('Previous due cannot be greater than the customer balance');
+      }
+    } else if (previousDueAdded > 0) {
+      throw new Error('A saved customer is required to add previous due');
+    }
+
     let subtotal = 0;
     const itemDetails = [];
 
@@ -105,7 +143,8 @@ function createInvoice(invoiceData) {
     if (normalizedDiscount > subtotal) {
       throw new Error('Discount cannot be greater than the subtotal');
     }
-    const grand_total = subtotal - normalizedDiscount + normalizedTax;
+    const currentGrandTotal = subtotal - normalizedDiscount + normalizedTax;
+    const grand_total = currentGrandTotal + previousDueAdded;
     
     const invoiceNumberStart =
       db.prepare(`SELECT value FROM settings WHERE key = 'invoice_number_start'`).get()
@@ -175,8 +214,8 @@ function createInvoice(invoiceData) {
       throw new Error('Customer is required for a credit invoice');
     }
     const invoiceStmt = db.prepare(`
-      INSERT INTO invoices (invoice_number, customer_id, customer_name, customer_address, customer_phone, subtotal, discount, tax, grand_total, payment_method, payment_status)
-      VALUES (@invoice_number, @customer_id, @customer_name, @customer_address, @customer_phone, @subtotal, @discount, @tax, @grand_total, @payment_method, @payment_status)
+      INSERT INTO invoices (invoice_number, customer_id, customer_name, customer_address, customer_phone, subtotal, discount, tax, grand_total, previous_due_added, payment_method, payment_status)
+      VALUES (@invoice_number, @customer_id, @customer_name, @customer_address, @customer_phone, @subtotal, @discount, @tax, @grand_total, @previous_due_added, @payment_method, @payment_status)
     `);
     const result = invoiceStmt.run({
       invoice_number,
@@ -187,9 +226,17 @@ function createInvoice(invoiceData) {
       tax: normalizedTax,
       payment_method: storedPaymentMethod,
       payment_status,
-      grand_total
+      grand_total,
+      previous_due_added: previousDueAdded
     });
     const invoiceId = result.lastInsertRowid;
+
+    if (previousDueAdded > 0) {
+      db.prepare(`
+        INSERT INTO balance_adjustments (customer_id, invoice_id, amount)
+        VALUES (?, ?, ?)
+      `).run(effectiveCustomerId, invoiceId, previousDueAdded);
+    }
 
     const paymentStmt = db.prepare(`INSERT INTO payments (invoice_id, amount, method)VALUES (@invoice_id, @amount, @method)`);
 
@@ -228,13 +275,13 @@ function createInvoice(invoiceData) {
       }
     }
 
-    return { invoiceId, invoice_number, grand_total };
+    return { invoiceId, invoice_number, grand_total, current_grand_total: currentGrandTotal };
   });
 
   return createInvoiceTransaction();
 }
 
-function addPayment(invoiceId, amount, method = 'cash') {
+function addPayment(invoiceId, amount, method = 'cash', paymentDate = null) {
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
     throw new Error('Invalid payment amount');
   }
@@ -278,16 +325,45 @@ function addPayment(invoiceId, amount, method = 'cash') {
     }
 
     // Add payment
-    const paymentStmt = db.prepare(`
-      INSERT INTO payments (invoice_id, amount, method)
-      VALUES (@invoice_id, @amount, @method)
-    `);
+    const normalizedPaymentDate = paymentDate ? String(paymentDate).trim() : null;
+    if (normalizedPaymentDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedPaymentDate)) {
+        throw new Error('Payment date is invalid');
+      }
 
-    const result = paymentStmt.run({
+      const parsedPaymentDate = new Date(`${normalizedPaymentDate}T00:00:00Z`);
+      if (Number.isNaN(parsedPaymentDate.getTime()) ||
+        parsedPaymentDate.toISOString().slice(0, 10) !== normalizedPaymentDate) {
+        throw new Error('Payment date is invalid');
+      }
+
+      const todayInIndia = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+      }).format(new Date());
+      if (normalizedPaymentDate > todayInIndia) {
+        throw new Error('Payment date cannot be in the future');
+      }
+    }
+
+    const paymentStmt = db.prepare(normalizedPaymentDate
+      ? `
+        INSERT INTO payments (invoice_id, amount, method, payment_date)
+        VALUES (@invoice_id, @amount, @method, @payment_date)
+      `
+      : `
+        INSERT INTO payments (invoice_id, amount, method)
+        VALUES (@invoice_id, @amount, @method)
+      `);
+
+    const paymentValues = {
       invoice_id: invoiceId,
       amount: paymentAmount,
       method,
-    });
+    };
+    if (normalizedPaymentDate) {
+      paymentValues.payment_date = `${normalizedPaymentDate} 12:00:00`;
+    }
+    const result = paymentStmt.run(paymentValues);
 
     const newTotalPaid = totalPaid + paymentAmount;
 
@@ -361,7 +437,12 @@ function updateInvoice(invoiceId, invoiceData) {
     if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
       throw new Error('Invalid discount');
     }
-    const grandTotal = subtotal - discount;
+    const currentGrandTotal = subtotal - discount;
+    const existingPreviousDue = Number(invoice.previous_due_added || 0);
+    const requestedPreviousDue = Number(invoiceData.previous_due_added || 0);
+    if (!Number.isFinite(requestedPreviousDue) || requestedPreviousDue < 0) {
+      throw new Error('Previous due amount is invalid');
+    }
     const existingPaid = Number(db.prepare(`
       SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE invoice_id = ?
     `).get(invoiceId).total || 0);
@@ -375,6 +456,15 @@ function updateInvoice(invoiceId, invoiceData) {
     if (requestedPaymentMethod === 'credit' && !customerId) {
       throw new Error('Customer is required for a credit invoice');
     }
+    db.prepare(`DELETE FROM balance_adjustments WHERE invoice_id = ?`).run(invoiceId);
+    if (requestedPreviousDue > 0 && (!customerId ||
+      requestedPreviousDue > getCustomerOutstanding(customerId, invoiceId))) {
+      throw new Error('Previous due cannot be greater than the customer balance');
+    }
+    if (!customerId && requestedPreviousDue > 0) {
+      throw new Error('A saved customer is required to add previous due');
+    }
+    const grandTotal = currentGrandTotal + requestedPreviousDue;
     const requestedCashAmount = Number(invoiceData.initial_cash_amount || 0);
     const requestedOnlineAmount = Number(invoiceData.initial_online_amount || 0);
     if (!Number.isFinite(requestedCashAmount) || requestedCashAmount < 0 ||
@@ -419,7 +509,7 @@ function updateInvoice(invoiceId, invoiceData) {
       UPDATE invoices
       SET customer_id = ?, customer_name = ?, customer_address = ?,
           customer_phone = ?, subtotal = ?, discount = ?, grand_total = ?,
-          payment_method = ?, payment_status = ?
+          previous_due_added = ?, payment_method = ?, payment_status = ?
       WHERE id = ?
     `).run(
       customerId || null,
@@ -429,10 +519,17 @@ function updateInvoice(invoiceId, invoiceData) {
       subtotal,
       discount,
       grandTotal,
+      requestedPreviousDue,
       paymentMethod,
       updatedPaid >= grandTotal ? 'paid' : updatedPaid > 0 ? 'partial' : 'unpaid',
       invoiceId
     );
+    if (requestedPreviousDue > 0) {
+      db.prepare(`
+        INSERT INTO balance_adjustments (customer_id, invoice_id, amount)
+        VALUES (?, ?, ?)
+      `).run(customerId, invoiceId, requestedPreviousDue);
+    }
 
     db.prepare(`DELETE FROM invoice_items WHERE invoice_id = ?`).run(invoiceId);
     const insertItem = db.prepare(`
@@ -501,6 +598,7 @@ function deleteInvoices(invoiceIds, ownerPin) {
     }
 
     db.prepare(`DELETE FROM payments WHERE invoice_id IN (${placeholders})`).run(...normalizedIds);
+    db.prepare(`DELETE FROM balance_adjustments WHERE invoice_id IN (${placeholders})`).run(...normalizedIds);
     db.prepare(`DELETE FROM invoice_items WHERE invoice_id IN (${placeholders})`).run(...normalizedIds);
     db.prepare(`DELETE FROM invoices WHERE id IN (${placeholders})`).run(...normalizedIds);
 

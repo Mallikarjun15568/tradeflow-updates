@@ -23,15 +23,31 @@ function Billing({
   onEditComplete,
   onEditInvoice,
   onEditInvoiceUnavailable,
+  initialActiveTab = 'new',
+  onActiveTabChange,
 }) {
   const draftKey = 'tradeflow_billing_draft';
-  const [activeTab, setActiveTab] = useState('new');
+  const historyStateKey = 'tradeflow_billing_history_state';
+  const savedHistoryState = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(historyStateKey) || '{}');
+    } catch (error) {
+      console.error('Failed to restore billing history state:', error);
+      return {};
+    }
+  })();
+  const [activeTab, setActiveTab] = useState(initialActiveTab);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [oldDueAmount, setOldDueAmount] = useState(0);
+  const [oldDueInput, setOldDueInput] = useState('');
+  const [showOldDueEditor, setShowOldDueEditor] = useState(false);
+  const [showPaymentSummary, setShowPaymentSummary] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const productInputRef = useRef(null);
   const [quantity, setQuantity] = useState(1);
@@ -47,17 +63,31 @@ function Billing({
   const [paymentErrorMsg, setPaymentErrorMsg] = useState('');
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const itemsScrollRef = useRef(null);
-  const [historySearch, setHistorySearch] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [historySearch, setHistorySearch] = useState(savedHistoryState.historySearch || '');
+  const [paymentFilter, setPaymentFilter] = useState(savedHistoryState.paymentFilter || 'all');
+  const [dateFrom, setDateFrom] = useState(savedHistoryState.dateFrom || '');
+  const [dateTo, setDateTo] = useState(savedHistoryState.dateTo || '');
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [deleteModalStep, setDeleteModalStep] = useState(null);
   const [deletePin, setDeletePin] = useState('');
   const [deletingInvoices, setDeletingInvoices] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(savedHistoryState.historyPage || 1);
   const draftLoadedRef = useRef(false);
   const historyPerPage = 10;
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(historyStateKey, JSON.stringify({
+        historySearch,
+        paymentFilter,
+        dateFrom,
+        dateTo,
+        historyPage,
+      }));
+    } catch (error) {
+      console.error('Failed to save billing history state:', error);
+    }
+  }, [historySearch, paymentFilter, dateFrom, dateTo, historyPage]);
 
   const loadData = async () => {
     try {
@@ -105,6 +135,7 @@ function Billing({
         setPaymentMethod(invoice.payment_method || 'cash');
         setCashAmount(Number(invoice.cash_received || 0));
         setOnlineAmount(Number(invoice.online_received || 0));
+        setOldDueAmount(Number(invoice.previous_due_added || 0));
         setItems(invoice.items.map((item) => ({
           id: item.id,
           product_id: item.product_id,
@@ -222,6 +253,10 @@ function Billing({
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
+    setSelectedCustomerId(null);
+    setOldDueAmount(0);
+    setOldDueInput('');
+    setShowOldDueEditor(false);
     setProductSearch('');
     setQuantity(1);
     setRate('');
@@ -243,8 +278,47 @@ function Billing({
       normalizeCustomerName(c.name) === normalizeCustomerName(customerName)
     )
     : null;
-  const matchedCustomer = phoneMatch ||
+  const selectedCustomer = selectedCustomerId
+    ? customers.find((customer) => customer.id === selectedCustomerId) || null
+    : null;
+  const matchedCustomer = selectedCustomer || phoneMatch ||
     (!customerPhone.trim() && nameMatches.length === 1 ? nameMatches[0] : null);
+  const availableOldDue = Math.max(
+    0,
+    Number(matchedCustomer?.outstanding_balance || 0) +
+      (editingInvoiceId ? Number(oldDueAmount || 0) : 0)
+  );
+
+  const handleCustomerNameChange = (value) => {
+    setCustomerName(value);
+    setSelectedCustomerId(null);
+
+    const matchingCustomers = customers.filter(
+      (customer) => normalizeCustomerName(customer.name) === normalizeCustomerName(value)
+    );
+    if (matchingCustomers.length === 1) {
+      const customer = matchingCustomers[0];
+      setSelectedCustomerId(customer.id);
+      setCustomerPhone(customer.phone || '');
+      setCustomerAddress(customer.address || '');
+      setOldDueAmount(0);
+      setOldDueInput('');
+    } else {
+      setOldDueAmount(0);
+      setOldDueInput('');
+      setShowOldDueEditor(false);
+    }
+  };
+
+  const handleCustomerSelection = (customerId) => {
+    const customer = customers.find((entry) => String(entry.id) === customerId);
+    if (!customer) return;
+
+    setSelectedCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone || '');
+    setCustomerAddress(customer.address || '');
+  };
 
   const matchedProduct = products.find(
     (p) => p.name.trim().toLowerCase() === productSearch.trim().toLowerCase()
@@ -322,14 +396,17 @@ function Billing({
 
   const subTotal = items.reduce((sum, i) => sum + i.qty * i.rate, 0);
   const grandTotal = subTotal - Number(discount || 0);
+  const payableTotal = grandTotal + Number(oldDueAmount || 0);
   const normalizedCashAmount = cashAmount === '' ? 0 : Number(cashAmount);
   const normalizedOnlineAmount = onlineAmount === '' ? 0 : Number(onlineAmount);
   const effectiveCashAmount =
     paymentMethod === 'cash'
-      ? Math.max(0, grandTotal - normalizedOnlineAmount)
+      ? (cashAmount === ''
+        ? Math.max(0, payableTotal - normalizedOnlineAmount)
+        : normalizedCashAmount)
       : normalizedCashAmount;
   const totalReceived = effectiveCashAmount + normalizedOnlineAmount;
-  const remainingAmount = grandTotal - totalReceived;
+  const remainingAmount = payableTotal - totalReceived;
 
   //History filters
   const filteredInvoices = invoices.filter((inv) => {
@@ -450,12 +527,14 @@ const paginatedInvoices = filteredInvoices.slice(
      }
      const defaultCashAmount =
       paymentMethod === 'cash'
-        ? Math.max(0, grandTotal - normalizedOnlineAmount)
-        : normalizedCashAmount;
+         ? (cashAmount === ''
+           ? Math.max(0, payableTotal - normalizedOnlineAmount)
+           : normalizedCashAmount)
+         : normalizedCashAmount;
     const finalTotalReceived = defaultCashAmount + normalizedOnlineAmount;
     if (!Number.isFinite(defaultCashAmount) || defaultCashAmount < 0 ||
       !Number.isFinite(normalizedOnlineAmount) || normalizedOnlineAmount < 0 ||
-      (!editingInvoiceId && finalTotalReceived > grandTotal)) {
+      (!editingInvoiceId && finalTotalReceived > payableTotal)) {
       setPaymentErrorMsg('Cash and online payments cannot be greater than the invoice total.');
       return;
     }
@@ -503,6 +582,7 @@ const paginatedInvoices = filteredInvoices.slice(
         payment_method: paymentMethod,
         initial_cash_amount: defaultCashAmount,
         initial_online_amount: normalizedOnlineAmount,
+        previous_due_added: oldDueAmount,
       };
       const result = editingInvoiceId
         ? await window.api.billing.updateInvoice(editingInvoiceId, {
@@ -533,7 +613,10 @@ const paginatedInvoices = filteredInvoices.slice(
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
           <button
-            onClick={() => setActiveTab('new')}
+            onClick={() => {
+              setActiveTab('new');
+              onActiveTabChange?.('new');
+            }}
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
               activeTab === 'new' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'
             }`}
@@ -541,7 +624,10 @@ const paginatedInvoices = filteredInvoices.slice(
             New Bill
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => {
+              setActiveTab('history');
+              onActiveTabChange?.('history');
+            }}
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
               activeTab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'
             }`}
@@ -856,22 +942,7 @@ const paginatedInvoices = filteredInvoices.slice(
                   list="customer-list"
                   placeholder="Customer name"
                   value={customerName}
-                  onChange={(e) => { const value = e.target.value; setCustomerName(value);
-                    const matchingCustomers = customers.filter(
-                      (c) => normalizeCustomerName(c.name) === normalizeCustomerName(value)
-                    );
-                    const customer = matchingCustomers.length === 1
-                      ? matchingCustomers[0]
-                      : null;
-
-                  if (customer) {
-                    setCustomerPhone(customer.phone || '');
-                      setCustomerAddress(customer.address || '');
-                    } else {
-                      setCustomerPhone('');
-                      setCustomerAddress('');
-                    }
-                }}
+                  onChange={(e) => handleCustomerNameChange(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
                 <datalist id="customer-list">
@@ -879,6 +950,21 @@ const paginatedInvoices = filteredInvoices.slice(
                     <option key={c.id} value={c.name} />
                   ))}
                 </datalist>
+                {nameMatches.length > 1 && (
+                  <select
+                    value={selectedCustomerId || ''}
+                    onChange={(e) => handleCustomerSelection(e.target.value)}
+                    className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    aria-label="Select customer with this name"
+                  >
+                    <option value="">Select the matching customer</option>
+                    {nameMatches.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.phone || 'No phone'} — {customer.address || 'No address'}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="w-40">
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Mobile Number</label>
@@ -1054,10 +1140,131 @@ const paginatedInvoices = filteredInvoices.slice(
           </div>
 
           <div className="ui-card p-5">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-slate-800">Payment and Summary</h2>
-              <p className="text-xs text-slate-400 mt-1">Review totals and record how the customer paid</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowPaymentSummary((isOpen) => !isOpen)}
+              aria-expanded={showPaymentSummary}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-slate-800">Payment and Summary</span>
+                <span className="block text-xs text-slate-400 mt-1">
+                  Review totals and record how the customer paid
+                </span>
+              </span>
+              <span className="ml-4 flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-800">
+                  ₹{payableTotal.toFixed(2)}
+                </span>
+                <span
+                  className={`text-lg text-slate-400 transition-transform ${
+                    showPaymentSummary ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                >
+                  ▼
+                </span>
+              </span>
+            </button>
+            {showPaymentSummary && (
+              <>
+            {matchedCustomer && (
+              <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-medium text-amber-800 block">Previous Due</span>
+                    <span className="text-lg font-semibold text-amber-900">
+                      ₹{Number(oldDueAmount || 0).toFixed(2)}
+                    </span>
+                    {availableOldDue > 0 && oldDueAmount === 0 && (
+                      <span className="ml-2 text-xs text-amber-700">
+                        Available: ₹{availableOldDue.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {oldDueAmount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOldDueInput(String(oldDueAmount));
+                          setShowOldDueEditor(true);
+                        }}
+                        className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {oldDueAmount === 0 && availableOldDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOldDueInput(String(availableOldDue));
+                          setShowOldDueEditor(true);
+                        }}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700"
+                      >
+                        + Add Old Due
+                      </button>
+                    )}
+                    {oldDueAmount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOldDueAmount(0);
+                          setOldDueInput('');
+                          setShowOldDueEditor(false);
+                        }}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {showOldDueEditor && (
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <label className="text-xs text-amber-800">
+                      Amount to add
+                      <input
+                        type="number"
+                        min="0"
+                        max={availableOldDue}
+                        value={oldDueInput}
+                        onChange={(event) => setOldDueInput(event.target.value)}
+                        className="mt-1 block w-36 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const amount = Number(oldDueInput);
+                        if (!Number.isFinite(amount) || amount <= 0 || amount > availableOldDue) {
+                          setPaymentErrorMsg(`Old due must be between ₹0.01 and ₹${availableOldDue.toFixed(2)}.`);
+                          return;
+                        }
+                        setOldDueAmount(amount);
+                        setShowOldDueEditor(false);
+                        setPaymentErrorMsg('');
+                      }}
+                      className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOldDueInput('');
+                        setShowOldDueEditor(false);
+                      }}
+                      className="rounded-lg px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
                 <span className="text-xs font-medium text-gray-500 block">Sub Total</span>
@@ -1092,6 +1299,18 @@ const paginatedInvoices = filteredInvoices.slice(
                   <span className="text-gray-500">Received</span>
                   <span className="font-semibold text-gray-800">₹{totalReceived.toFixed(2)}</span>
                 </div>
+                {oldDueAmount > 0 && (
+                  <>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-500">Current Bill</span>
+                      <span className="font-semibold text-gray-800">₹{grandTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-500">Old Due Added</span>
+                      <span className="font-semibold text-gray-800">₹{oldDueAmount.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between text-sm mt-1">
                   <span className="text-gray-500">Remaining</span>
                   <span className={`font-semibold ${remainingAmount > 0 ? 'text-orange-600' : 'text-green-600'}`}>
@@ -1107,21 +1326,17 @@ const paginatedInvoices = filteredInvoices.slice(
                 <input
                   type="number"
                   min="0"
-                  max={grandTotal}
-                  value={paymentMethod === 'cash'
-                    ? Math.max(0, grandTotal - normalizedOnlineAmount)
+                  max={payableTotal}
+                  value={paymentMethod === 'cash' && cashAmount === ''
+                    ? Math.max(0, payableTotal - normalizedOnlineAmount)
                     : cashAmount}
-                  readOnly={paymentMethod === 'cash'}
+                  readOnly={false}
                   onChange={(e) => {
-                    if (paymentMethod !== 'cash') {
-                      setCashAmount(e.target.value);
-                    }
+                    setCashAmount(e.target.value);
                     setPaymentErrorMsg('');
                   }}
                   placeholder="0.00"
-                  className={`w-full border border-green-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
-                    paymentMethod === 'cash' ? 'bg-green-100/70 text-gray-600 cursor-not-allowed' : 'bg-white'
-                  }`}
+                  className="w-full border border-green-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
                 />
               </div>
               <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
@@ -1129,7 +1344,7 @@ const paginatedInvoices = filteredInvoices.slice(
                 <input
                   type="number"
                   min="0"
-                  max={grandTotal}
+                  max={payableTotal}
                   value={onlineAmount}
                   onChange={(e) => {
                     setOnlineAmount(e.target.value);
@@ -1149,7 +1364,7 @@ const paginatedInvoices = filteredInvoices.slice(
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-5 pt-5 border-t border-gray-100">
               <div>
                 <span className="text-xs text-gray-500 block">Grand Total</span>
-                <span className="text-2xl font-bold text-slate-900">₹{grandTotal.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-slate-900">₹{payableTotal.toFixed(2)}</span>
               </div>
               <button
                 type="button"
@@ -1162,6 +1377,8 @@ const paginatedInvoices = filteredInvoices.slice(
                 {creating ? 'Saving Invoice...' : editingInvoiceId ? 'Save Invoice Changes' : 'Create Invoice'}
               </button>
             </div>
+              </>
+            )}
           </div>
         </>
       )}

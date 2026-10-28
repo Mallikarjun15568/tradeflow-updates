@@ -9,6 +9,8 @@ import {
   Settings as SettingsIcon,
   Info,
   Eye,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import Products from './Products';
 import Customers from './Customers';
@@ -169,10 +171,30 @@ const menuItems = [
 
 function App() {
   const [activeSection, setActiveSection] = useState('billing');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('tradeflow_sidebar_collapsed') === 'true';
+    } catch (error) {
+      console.error('Failed to restore sidebar preference:', error);
+      return false;
+    }
+  });
   const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
   const [invoiceViewOnly, setInvoiceViewOnly] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const [billingTab, setBillingTab] = useState('new');
   const activeItem = menuItems.find((item) => item.id === activeSection);
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        localStorage.setItem('tradeflow_sidebar_collapsed', String(next));
+      } catch (error) {
+        console.error('Failed to save sidebar preference:', error);
+      }
+      return next;
+    });
+  };
   const [viewingCustomerId, setViewingCustomerId] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [checkingLicense, setCheckingLicense] = useState(true);
@@ -302,13 +324,13 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-[2px_0_12px_rgba(15,23,42,0.03)]">
-        <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-64'} bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-[2px_0_12px_rgba(15,23,42,0.03)] transition-[width] duration-200`}>
+        <div className={`${sidebarCollapsed ? 'px-3 justify-center' : 'px-5'} py-5 flex items-center gap-3 border-b border-slate-100`}>
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-blue-600/25">
                 T
           </div>
 
-<div>
+<div className={sidebarCollapsed ? 'hidden' : ''}>
   <div className="text-slate-800 font-semibold leading-tight tracking-tight">
     TradeFlow
   </div>
@@ -327,21 +349,22 @@ function App() {
                 key={item.id}
                 onClick={() => openSection(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 focus:outline-none ${
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-3.5'} py-2.5 rounded-xl text-sm font-medium transition-all duration-150 focus:outline-none ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
                 <Icon size={18} strokeWidth={2} />
-                {item.label}
+                {!sidebarCollapsed && item.label}
               </button>
             );
           })}
         </nav>
 
-        <div className="px-5 py-4 border-t border-slate-100 text-[11px] text-slate-400">
-          TradeFlow v{appVersion || '...'}
+        <div className={`${sidebarCollapsed ? 'px-2 text-center' : 'px-5'} py-4 border-t border-slate-100 text-[11px] text-slate-400`}>
+          {sidebarCollapsed ? `v${appVersion || '...'}` : `TradeFlow v${appVersion || '...'}`}
         </div>
       </aside>
 
@@ -349,11 +372,22 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top header */}
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
-          <div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+            <div>
             <h1 className="text-base font-semibold text-slate-800 tracking-tight">{activeItem.label}</h1>
             <p className="text-[11px] text-slate-400 mt-0.5">
               {activeSection === 'billing' ? 'Create and manage your invoices' : 'Manage your business securely'}
             </p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 ring-4 ring-blue-50/60 flex items-center justify-center font-semibold text-sm">
@@ -402,10 +436,12 @@ function App() {
 ) : activeSection === 'billing' ? (
   <Billing
     onInvoiceCreated={(id) => {
+      setBillingTab('new');
       setInvoiceViewOnly(false);
       setViewingInvoiceId(id);
     }}
     onViewInvoice={(id) => {
+      setBillingTab('history');
       setInvoiceViewOnly(true);
       setViewingInvoiceId(id);
     }}
@@ -413,6 +449,8 @@ function App() {
     onEditComplete={() => setEditingInvoiceId(null)}
     onEditInvoice={openInvoiceEditor}
     onEditInvoiceUnavailable={() => setEditingInvoiceId(null)}
+    initialActiveTab={billingTab}
+    onActiveTabChange={setBillingTab}
   />
 ) : activeSection === 'stock' ? (
   <Stock />

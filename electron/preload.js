@@ -37,10 +37,12 @@ contextBridge.exposeInMainWorld('api', {
     deleteInvoice: (id, ownerPin) => invoke('billing:deleteInvoice', id, ownerPin),
     deleteInvoices: (ids, ownerPin) => invoke('billing:deleteInvoices', ids, ownerPin),
     getInvoiceWithItems: (id) => invoke('billing:getInvoiceWithItems', id),
-    addPayment: (invoiceId, amount, method) => invoke('billing:addPayment', invoiceId, amount, method),
+    addPayment: (invoiceId, amount, method, paymentDate) =>
+      invoke('billing:addPayment', invoiceId, amount, method, paymentDate),
     getInvoicePayments: (invoiceId) => invoke('billing:getInvoicePayments', invoiceId),
     print: () => invoke('billing:print'),
     quickPrint: () => invoke('billing:quickPrint'),
+    downloadPDF: (invoiceNumber) => invoke('billing:downloadPDF', invoiceNumber),
   },
   dashboard: {
   getSummary: () => invoke('dashboard:getSummary'),

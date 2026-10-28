@@ -1,5 +1,5 @@
   import { Fragment, useState, useEffect, useRef } from 'react';
-  import { ArrowLeft, Printer, Zap, Pencil } from 'lucide-react';
+  import { ArrowLeft, Download, Printer, Zap, Pencil } from 'lucide-react';
 
   const ITEMS_PER_PAGE = 29;
   const LAST_PAGE_ITEM_LIMIT = 24;
@@ -26,7 +26,10 @@
     const [shopSettings, setShopSettings] = useState({});
     const [loading, setLoading] = useState(true);
     const [printing, setPrinting] = useState(false);
+    const [downloading, setDownloading] = useState(false);
     const [printError, setPrintError] = useState('');
+    const [downloadMessage, setDownloadMessage] = useState('');
+    const downloadMessageTimerRef = useRef(null);
     const [actionError, setActionError] = useState('');
     const printInProgressRef = useRef(false);
     const invoiceRequestRef = useRef(0);
@@ -37,6 +40,9 @@
 
       return () => {
         ++invoiceRequestRef.current;
+        if (downloadMessageTimerRef.current) {
+          clearTimeout(downloadMessageTimerRef.current);
+        }
       };
     }, [invoiceId]);
 
@@ -114,6 +120,33 @@
       }
     };
 
+    const handleDownload = async () => {
+      if (printing || downloading) return;
+
+      setDownloading(true);
+      setPrintError('');
+      setDownloadMessage('');
+      try {
+        const result = await window.api.billing.downloadPDF(invoice.invoice_number);
+        if (!result.success) {
+          setPrintError('Invoice download failed.');
+          return;
+        }
+        setDownloadMessage('Invoice PDF downloaded successfully.');
+        if (downloadMessageTimerRef.current) {
+          clearTimeout(downloadMessageTimerRef.current);
+        }
+        downloadMessageTimerRef.current = setTimeout(() => {
+          setDownloadMessage('');
+          downloadMessageTimerRef.current = null;
+        }, 4000);
+      } catch (error) {
+        setPrintError(error.message || 'Invoice download failed.');
+      } finally {
+        setDownloading(false);
+      }
+    };
+
     if (loading) {
       return <div className="text-center text-gray-400 py-10">Loading...</div>;
     }
@@ -123,6 +156,9 @@
     }
 
     // Split items into pages of ITEMS_PER_PAGE
+    const lastPageItemLimit = Number(invoice.previous_due_added || 0) > 0
+      ? LAST_PAGE_ITEM_LIMIT - 1
+      : LAST_PAGE_ITEM_LIMIT;
     const pages = [];
     for (let i = 0; i < invoice.items.length; i += ITEMS_PER_PAGE) {
       pages.push(invoice.items.slice(i, i + ITEMS_PER_PAGE));
@@ -131,10 +167,10 @@
 
     // Keep full item pages. If the final page is full, use a separate totals page.
     const lastPage = pages[pages.length - 1];
-    if (pages.length === 1 && lastPage.length > LAST_PAGE_ITEM_LIMIT) {
+    if (pages.length === 1 && lastPage.length > lastPageItemLimit) {
       pages.push([]);
-    } else if (pages.length > 1 && lastPage.length > LAST_PAGE_ITEM_LIMIT) {
-      pages.push(lastPage.splice(LAST_PAGE_ITEM_LIMIT));
+    } else if (pages.length > 1 && lastPage.length > lastPageItemLimit) {
+      pages.push(lastPage.splice(lastPageItemLimit));
     }
 
     return (
@@ -149,6 +185,14 @@
           </button>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownload}
+              disabled={printing || downloading}
+              className="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Download size={16} />
+              {downloading ? 'Downloading...' : 'Download PDF'}
+            </button>
+            <button
               onClick={handlePrint}
               disabled={printing}
               className="flex items-center gap-2 border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -158,7 +202,7 @@
             </button>
             <button
               onClick={handleQuickPrint}
-              disabled={printing}
+              disabled={printing || downloading}
               className="flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               <Zap size={16} />
@@ -169,6 +213,11 @@
         {printError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg print:hidden">
             {printError}
+          </div>
+        )}
+        {downloadMessage && (
+          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg print:hidden">
+            {downloadMessage}
           </div>
         )}
         {actionError && (
@@ -403,6 +452,12 @@
                           <td className="px-3 py-1.5 border-r border-gray-800">GRAND TOTAL</td>
                           <td className="px-3 py-1.5 text-right">{invoice.grand_total.toFixed(2)}</td>
                         </tr>
+                        {Number(invoice.previous_due_added || 0) > 0 && (
+                          <tr>
+                            <td className="px-3 py-1.5 text-gray-600 border-r border-gray-800">Old Balance Added</td>
+                            <td className="px-3 py-1.5 text-right">{Number(invoice.previous_due_added).toFixed(2)}</td>
+                          </tr>
+                        )}
                         {invoice.payment_method === 'credit' && (
                           <>
                             <tr>

@@ -111,7 +111,8 @@ function registerIpcHandlers() {
         billingService.deleteInvoices(ids, ownerPin)
     );
     ipcMain.handle('billing:getInvoiceWithItems', (event, id) => billingService.getInvoiceWithItems(id));
-    ipcMain.handle('billing:addPayment', (event, invoiceId, amount, method) => billingService.addPayment(invoiceId, amount, method));
+    ipcMain.handle('billing:addPayment', (event, invoiceId, amount, method, paymentDate) =>
+        billingService.addPayment(invoiceId, amount, method, paymentDate));
     ipcMain.handle('billing:getInvoicePayments',(event, invoiceId) => billingService.getInvoicePayments(invoiceId));
     
     // Dashboard

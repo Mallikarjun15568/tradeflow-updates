@@ -45,6 +45,19 @@ function getAllCustomers() {
     const stmt = db.prepare(`
         SELECT
             c.*,
+            COALESCE(c.opening_balance, 0) +
+            COALESCE((
+                SELECT SUM(i.grand_total - COALESCE((
+                    SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id
+                ), 0))
+                FROM invoices i
+                WHERE i.customer_id = c.id
+            ), 0) -
+            COALESCE((
+                SELECT SUM(ba.amount)
+                FROM balance_adjustments ba
+                WHERE ba.customer_id = c.id
+            ), 0) AS outstanding_balance,
             EXISTS(
                 SELECT 1
                 FROM invoices i
@@ -106,6 +119,12 @@ function getCreditCustomers() {
             c.name,
             c.phone,
             c.address,
+            c.opening_balance,
+            COALESCE((
+                SELECT SUM(ba.amount)
+                FROM balance_adjustments ba
+                WHERE ba.customer_id = c.id
+            ), 0) AS balance_adjustments,
 
             COALESCE((
                 SELECT SUM(
@@ -117,7 +136,7 @@ function getCreditCustomers() {
                 )
                 FROM invoices i
                 WHERE i.customer_id = c.id
-            ), 0) AS total_credit
+            ), 0) AS invoice_credit
             ,
             COALESCE((
                 SELECT SUM(p.amount)
@@ -132,14 +151,17 @@ function getCreditCustomers() {
 
     return customers
         .map((customer) => {
-            const totalCredit = Math.max(0, Number(customer.total_credit || 0));
+            const openingBalance = Math.max(0, Number(customer.opening_balance || 0));
+            const totalCredit = Math.max(0, Number(customer.invoice_credit || 0));
+            const adjustments = Math.max(0, Number(customer.balance_adjustments || 0));
             const totalPaid = Number(customer.total_paid || 0);
 
             return {
                 ...customer,
-                total_credit: totalCredit,
+                opening_balance: openingBalance,
+                total_credit: totalCredit + openingBalance,
                 total_paid: totalPaid,
-                remaining: totalCredit
+                remaining: Math.max(0, totalCredit + openingBalance - adjustments)
             };
         })
         .filter((customer) => customer.remaining > 0);
@@ -162,6 +184,7 @@ function getCustomerCreditBills(customerId) {
             i.invoice_number,
             i.invoice_date,
             i.grand_total,
+            COALESCE(i.previous_due_added, 0) AS previous_due_added,
 
             COALESCE((
                 SELECT SUM(p.amount)
@@ -177,12 +200,14 @@ function getCustomerCreditBills(customerId) {
     return bills
         .map((bill) => {
             const amount = Number(bill.grand_total || 0);
+            const previousDueAdded = Number(bill.previous_due_added || 0);
             const paid = Number(bill.paid || 0);
             const remaining = Math.max(0, amount - paid);
 
             return {
                 ...bill,
                 amount,
+                previous_due_added: previousDueAdded,
                 paid,
                 remaining,
             };
@@ -221,7 +246,14 @@ function getCustomerPaymentSummary(customerId) {
         WHERE i.customer_id = ?
     `).get(customerId, customerId);
 
-    const totalCredit = Math.max(0, Number(creditResult.total_credit || 0));
+    const adjustmentResult = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM balance_adjustments
+        WHERE customer_id = ?
+    `).get(customerId);
+    const totalCredit = Math.max(0, Number(creditResult.total_credit || 0)) +
+      Math.max(0, Number(customer.opening_balance || 0)) -
+      Math.max(0, Number(adjustmentResult.total || 0));
 
     return {
         customer_id: customerId,
@@ -285,6 +317,13 @@ function getCustomerOverview(customerId) {
     const totalCredit = Number(salesResult.total_credit || 0);
 
     const totalReceivedFromPayments = Number(receivedResult.total_received || 0);
+    const adjustmentResult = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM balance_adjustments
+        WHERE customer_id = ?
+    `).get(customerId);
+    const openingBalance = Math.max(0, Number(customer.opening_balance || 0));
+    const balanceAdjustments = Math.max(0, Number(adjustmentResult.total || 0));
 
 
     /*
@@ -303,7 +342,7 @@ function getCustomerOverview(customerId) {
      */
     const balanceDue = Math.max(
         0,
-        totalSales - totalReceived
+        totalSales - totalReceived + openingBalance - balanceAdjustments
     );
 
 

@@ -11,7 +11,11 @@ release/
 *.db-wal
 
 database/
-backend/database/*.db
+
+backend/database/*
+!backend/database/
+!backend/database/connection.js
+!backend/database/schema.js
 
 dist/
 

@@ -13,6 +13,15 @@ import {
 const emptyForm = { name: '', phone: '', address: '' };
 
 function Customers({onViewCustomer}) {
+  const pageStateKey = 'tradeflow_customers_list_state';
+  const savedPageState = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(pageStateKey) || '{}');
+    } catch (error) {
+      console.error('Failed to restore customer list state:', error);
+      return {};
+    }
+  })();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState('');
@@ -20,18 +29,30 @@ function Customers({onViewCustomer}) {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(savedPageState.currentPage || 1);
   const itemsPerPage = 10;
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerOverview, setCustomerOverview] = useState(null);
   const [customerTransactions, setCustomerTransactions] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [customerFilter, setCustomerFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState(savedPageState.searchTerm || '');
+  const [customerFilter, setCustomerFilter] = useState(savedPageState.customerFilter || 'all');
   const [creditCustomers, setCreditCustomers] = useState([]);
   const [creditBills, setCreditBills] = useState({});
   const detailsRequestRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(pageStateKey, JSON.stringify({
+        currentPage,
+        searchTerm,
+        customerFilter,
+      }));
+    } catch (error) {
+      console.error('Failed to save customer list state:', error);
+    }
+  }, [currentPage, searchTerm, customerFilter]);
   
   useEffect(() => {
     loadCustomers();

@@ -30,10 +30,21 @@ function CustomerDetails({ customerId, onBack }) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentDate, setPaymentDate] = useState('');
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [sharingStatement, setSharingStatement] = useState(false);
   const detailsRequestRef = useRef(0);
+  const getTodayInputDate = () => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  };
 
   async function loadCustomerDetails() {
     const requestId = ++detailsRequestRef.current;
@@ -91,6 +102,7 @@ function CustomerDetails({ customerId, onBack }) {
   const openPaymentModal = () => {
     setPaymentAmount('');
     setPaymentMethod('cash');
+    setPaymentDate(getTodayInputDate());
     setPaymentError('');
     setShowPaymentModal(true);
   };
@@ -100,6 +112,7 @@ function CustomerDetails({ customerId, onBack }) {
 
     setShowPaymentModal(false);
     setPaymentAmount('');
+    setPaymentDate('');
     setPaymentError('');
   };
 
@@ -178,7 +191,8 @@ function CustomerDetails({ customerId, onBack }) {
         await window.api.billing.addPayment(
           invoice.id,
           paymentForInvoice,
-          paymentMethod
+          paymentMethod,
+          paymentDate
         );
 
         remainingPayment -= paymentForInvoice;
@@ -541,24 +555,19 @@ function CustomerDetails({ customerId, onBack }) {
                     {transaction.type === 'Credit Sale' &&
                     transaction.reference ? (
                       (() => {
-                        const bill = creditBills.find(
-                          (item) =>
-                            item.invoice_number === transaction.reference
-                        );
-
-                        if (!bill) return '—';
-
-                        const billDate = new Date(
-                          bill.invoice_date.replace(' ', 'T')
-                        );
-                        const today = new Date();
-                        const dueDays = Math.max(
-                          0,
-                          Math.floor(
-                            (today - billDate) /
-                              (1000 * 60 * 60 * 24)
-                          )
-                        );
+                        const billDateValue = String(transaction.date || '').slice(0, 10);
+                        const todayDateValue = getTodayInputDate();
+                        const billDate = new Date(`${billDateValue}T00:00:00Z`);
+                        const today = new Date(`${todayDateValue}T00:00:00Z`);
+                        const dueDays = Number.isNaN(billDate.getTime()) ||
+                          Number.isNaN(today.getTime())
+                          ? 0
+                          : Math.max(
+                            0,
+                            Math.floor(
+                              (today - billDate) / (1000 * 60 * 60 * 24)
+                            )
+                          );
 
                         return `${dueDays} ${
                           dueDays === 1 ? 'day' : 'days'
@@ -738,6 +747,20 @@ function CustomerDetails({ customerId, onBack }) {
               <option value="cash">Cash</option>
               <option value="online">Online</option>
             </select>
+
+            <label className="text-xs font-medium text-gray-500 mt-3 mb-1 block">
+              Payment Date
+            </label>
+            <input
+              type="date"
+              value={paymentDate}
+              max={getTodayInputDate()}
+              onChange={(e) => {
+                setPaymentDate(e.target.value);
+                setPaymentError('');
+              }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
 
             {paymentError && (
               <p className="text-xs text-red-600 mt-2">

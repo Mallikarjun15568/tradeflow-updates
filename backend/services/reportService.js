@@ -30,7 +30,7 @@ function getSalesReport(fromDate, toDate, customerId = null) {
         FROM payments p
         INNER JOIN invoices pi ON pi.id = p.invoice_id
         WHERE p.method = 'cash'
-          AND pi.invoice_date BETWEEN @start AND @end
+          AND p.payment_date BETWEEN @start AND @end
           ${customerId ? 'AND pi.customer_id = @customerId' : ''}
       ), 0) AS cash_sales,
 
@@ -39,7 +39,7 @@ function getSalesReport(fromDate, toDate, customerId = null) {
         FROM payments p
         INNER JOIN invoices pi ON pi.id = p.invoice_id
         WHERE p.method = 'online'
-          AND pi.invoice_date BETWEEN @start AND @end
+          AND p.payment_date BETWEEN @start AND @end
           ${customerId ? 'AND pi.customer_id = @customerId' : ''}
       ), 0) AS online_sales,
 
