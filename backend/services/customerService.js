@@ -52,6 +52,8 @@ function getAllCustomers() {
                 ), 0))
                 FROM invoices i
                 WHERE i.customer_id = c.id
+                  AND i.payment_method = 'credit'
+                  AND i.payment_method = 'credit'
             ), 0) -
             COALESCE((
                 SELECT SUM(ba.amount)
@@ -62,6 +64,7 @@ function getAllCustomers() {
                 SELECT 1
                 FROM invoices i
                 WHERE i.customer_id = c.id
+                  AND i.payment_method = 'credit'
             ) AS has_history
         FROM customers c
         ORDER BY name
@@ -136,6 +139,7 @@ function getCreditCustomers() {
                 )
                 FROM invoices i
                 WHERE i.customer_id = c.id
+                  AND i.payment_method = 'credit'
             ), 0) AS invoice_credit
             ,
             COALESCE((
@@ -230,11 +234,13 @@ function getCustomerPaymentSummary(customerId) {
      */
     const creditResult = db.prepare(`
         SELECT COALESCE(SUM(
-            i.grand_total - COALESCE((
-                SELECT SUM(p.amount)
-                FROM payments p
-                WHERE p.invoice_id = i.id
-            ), 0)
+            CASE WHEN i.payment_method = 'credit' THEN
+                i.grand_total - COALESCE((
+                    SELECT SUM(p.amount)
+                    FROM payments p
+                    WHERE p.invoice_id = i.id
+                ), 0)
+            ELSE 0 END
         ), 0) AS total_credit,
         COALESCE((
             SELECT SUM(p.amount)
@@ -286,11 +292,15 @@ function getCustomerOverview(customerId) {
         SELECT
             COALESCE(SUM(i.grand_total), 0) AS total_sales,
 
-            COALESCE(SUM(i.grand_total - COALESCE((
-                SELECT SUM(p.amount)
-                FROM payments p
-                WHERE p.invoice_id = i.id
-            ), 0)), 0) AS total_credit,
+            COALESCE(SUM(
+                CASE WHEN i.payment_method = 'credit' THEN
+                    i.grand_total - COALESCE((
+                        SELECT SUM(p.amount)
+                        FROM payments p
+                        WHERE p.invoice_id = i.id
+                    ), 0)
+                ELSE 0 END
+            ), 0) AS total_credit,
 
             COUNT(i.id) AS total_bills
 
@@ -342,7 +352,7 @@ function getCustomerOverview(customerId) {
      */
     const balanceDue = Math.max(
         0,
-        totalSales - totalReceived + openingBalance - balanceAdjustments
+        totalCredit + openingBalance - balanceAdjustments
     );
 
 

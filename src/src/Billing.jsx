@@ -16,6 +16,14 @@ const getUnitQuantity = (unit) => {
 const normalizeCustomerName = (name) =>
   String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
+const formatDisplayDate = (dateValue) => {
+  const value = String(dateValue || '');
+  const [datePart, timePart] = value.replace('T', ' ').split(' ');
+  const date = datePart.split('-');
+  if (date.length !== 3 || date.some((part) => !part)) return value || '—';
+  return `${date[2]}/${date[1]}/${date[0]}${timePart ? ` ${timePart}` : ''}`;
+};
+
 function Billing({
   onInvoiceCreated,
   onViewInvoice,
@@ -131,6 +139,7 @@ function Billing({
         setCustomerName(invoice.customer_name || '');
         setCustomerPhone(invoice.customer_phone || '');
         setCustomerAddress(invoice.customer_address || '');
+        setSelectedCustomerId(invoice.customer_id || null);
         setDiscount(invoice.discount || 0);
         setPaymentMethod(invoice.payment_method || 'cash');
         setCashAmount(Number(invoice.cash_received || 0));
@@ -802,7 +811,7 @@ const paginatedInvoices = filteredInvoices.slice(
                 </td>
 
                 <td className="px-6 py-3 text-gray-500">
-                  {inv.invoice_date}
+                  {formatDisplayDate(inv.invoice_date)}
                 </td>
 
                 <td className="px-6 py-3 text-right text-gray-700">
@@ -1327,16 +1336,21 @@ const paginatedInvoices = filteredInvoices.slice(
                   type="number"
                   min="0"
                   max={payableTotal}
-                  value={paymentMethod === 'cash' && cashAmount === ''
+                  value={paymentMethod === 'cash'
                     ? Math.max(0, payableTotal - normalizedOnlineAmount)
                     : cashAmount}
-                  readOnly={false}
+                  readOnly={paymentMethod === 'cash'}
                   onChange={(e) => {
+                    if (paymentMethod === 'cash') return;
                     setCashAmount(e.target.value);
                     setPaymentErrorMsg('');
                   }}
                   placeholder="0.00"
-                  className="w-full border border-green-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                  className={`w-full border border-green-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30 ${
+                    paymentMethod === 'cash'
+                      ? 'bg-green-100/70 text-gray-600 cursor-not-allowed'
+                      : 'bg-white'
+                  }`}
                 />
               </div>
               <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">

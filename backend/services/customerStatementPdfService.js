@@ -32,11 +32,14 @@ function formatDate(dateValue) {
     const date = new Date(dateValue);
     if (Number.isNaN(date.getTime())) return String(dateValue);
 
-    return date.toLocaleDateString('en-IN', {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
         day: '2-digit',
-        month: 'short',
+        month: '2-digit',
         year: 'numeric',
-    });
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${values.day}/${values.month}/${values.year}`;
 }
 
 function drawTableHeader(doc, y) {

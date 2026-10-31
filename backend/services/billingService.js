@@ -4,8 +4,12 @@ const settingsService = require('./settingsService');
 const { getProductById } = require('./productService');
 
 function getCustomerOutstanding(customerId, excludeInvoiceId = null) {
-  const invoiceExclusion = excludeInvoiceId ? 'AND i.id != ?' : '';
-  const parameters = excludeInvoiceId ? [customerId, excludeInvoiceId] : [customerId];
+  const invoiceExclusion = excludeInvoiceId ? 'AND i.id != @excludeInvoiceId' : '';
+  const adjustmentExclusion = excludeInvoiceId ? 'AND ba.invoice_id != @excludeInvoiceId' : '';
+  const parameters = {
+    customerId,
+    ...(excludeInvoiceId ? { excludeInvoiceId } : {}),
+  };
   const result = db.prepare(`
     SELECT
       COALESCE(c.opening_balance, 0) +
@@ -15,16 +19,18 @@ function getCustomerOutstanding(customerId, excludeInvoiceId = null) {
         ), 0))
         FROM invoices i
         WHERE i.customer_id = c.id
+          AND i.payment_method = 'credit'
           ${invoiceExclusion}
       ), 0) -
       COALESCE((
         SELECT SUM(ba.amount)
         FROM balance_adjustments ba
         WHERE ba.customer_id = c.id
+          ${adjustmentExclusion}
       ), 0) AS outstanding
     FROM customers c
-    WHERE c.id = ?
-  `).get(...parameters);
+    WHERE c.id = @customerId
+  `).get(parameters);
 
   return Math.max(0, Number(result?.outstanding || 0));
 }

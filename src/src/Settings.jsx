@@ -76,7 +76,9 @@ const loadSettings = async () => {
     if (data.last_backup) {
       setLastBackup(
         new Date(data.last_backup).toLocaleString('en-IN', {
-          dateStyle: 'medium',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
           timeStyle: 'short',
         })
       );
@@ -461,7 +463,9 @@ const loadSettings = async () => {
 
             if (result.backupTime) {
              setLastBackup(new Date(result.backupTime).toLocaleString('en-IN', {
-                          dateStyle: 'medium',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
                           timeStyle: 'short',
                         })
                       );

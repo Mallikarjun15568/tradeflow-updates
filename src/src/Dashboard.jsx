@@ -20,16 +20,13 @@ function formatAmount(amount) {
 function formatDate(dateString) {
   if (!dateString) return '-';
 
-  const date = new Date(dateString.replace(' ', 'T'));
+  const [datePart, timePart] = String(dateString).split(' ');
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return '-';
 
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  if (!timePart) return `${day}/${month}/${year}`;
+  const time = timePart.slice(0, 5);
+  return `${day}/${month}/${year} ${time}`;
 }
 
 function Dashboard() {

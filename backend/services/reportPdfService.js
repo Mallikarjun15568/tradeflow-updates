@@ -232,7 +232,12 @@ async function generateSalesReportPDF({
         const rowY = doc.y;
 
         const invoiceDate = invoice.invoice_date
-          ? new Date(invoice.invoice_date).toLocaleDateString('en-IN')
+          ? new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Asia/Kolkata',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            }).format(new Date(invoice.invoice_date))
           : '-';
 
         const customer = invoice.customer_name || 'Walk-in';

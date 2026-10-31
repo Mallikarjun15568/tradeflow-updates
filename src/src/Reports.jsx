@@ -8,6 +8,25 @@ function formatMoney(value) {
   })}`;
 }
 
+function formatDisplayDate(dateValue) {
+  const value = String(dateValue || '');
+  const [datePart, timePart] = value.replace('T', ' ').split(' ');
+  const parts = datePart.split('-');
+  if (parts.length !== 3 || parts.some((part) => !part)) return value || '—';
+  return `${parts[2]}/${parts[1]}/${parts[0]}${timePart ? ` ${timePart}` : ''}`;
+}
+
+function getTodayInputDate() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function StatCard({ title, value, icon: Icon, iconClass }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -48,7 +67,7 @@ function Reports() {
   }, []);
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayInputDate();
 
     setFromDate(today);
     setToDate(today);
@@ -343,7 +362,7 @@ async function handleDownloadPDF() {
               </td>
 
               <td className="px-5 py-3.5 text-gray-500">
-                {new Date(invoice.invoice_date).toLocaleDateString('en-IN')}
+                {formatDisplayDate(invoice.invoice_date)}
               </td>
 
               <td className="px-5 py-3.5 font-medium text-gray-800">

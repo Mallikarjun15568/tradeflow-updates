@@ -92,11 +92,8 @@ function CustomerDetails({ customerId, onBack }) {
       return date;
     }
 
-    return parsed.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    const [year, month, day] = date.slice(0, 10).split('-');
+    return `${day}/${month}/${year}`;
   };
 
   const openPaymentModal = () => {
