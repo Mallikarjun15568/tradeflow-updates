@@ -79,7 +79,8 @@ const loadSettings = async () => {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric',
-          timeStyle: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
         })
       );
     } else {
@@ -466,7 +467,8 @@ const loadSettings = async () => {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
-                          timeStyle: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
                         })
                       );
           }
